@@ -3,7 +3,7 @@
 int main(void)
 {
 	// Comment for printf.
-    // For test.222
+    // For test.
 	printf("Hello World!\n");
 	
 	return 0;
