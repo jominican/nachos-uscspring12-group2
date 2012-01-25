@@ -300,9 +300,5 @@ Condition::Signal(Lock* conditionLock)
 void 
 Condition::Broadcast(Lock* conditionLock) 
 { 
-	IntStatus old = interrupt->SetLevel(IntOff); 	// disable interrupt
-
 	while(!queue->IsEmpty()) Signal(conditionLock); 	// 	invoke the Signal operation
-
-	(void)interrupt->SetLevel(old); 	// restore interrupt
 }
