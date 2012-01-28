@@ -46,12 +46,83 @@ void init()
 //
 //
 //----------------------------------------------------------------------
-
+int doctorWaitingCount[MAX_DOCTOR];
+Lock* doctorWaitingLock[MAX_DOCTOR];
+Lock* doctorInteractLock[MAX_DOCTOR];
+Condition* doctorWaitingCV[MAX_DOCTOR];
+Condition* doctorWaitingCV[MAX_DOCTOR];
+enum Doctor_State{
+	D_BUSY, D_FREE
+};
+enum Doctor_Task{
+	T_FIRST, T_SECOND
+};
+Doctor_State doctorState[MAX_DOCTOR];
+Doctor_Task doctorTask[MAX_DOCTOR];
 void Doctor(unsigned int index)
 {
-	while(true)
-	{
-	
+	while(true){
+		///////////////////////////////////////////
+		// Try to enter the Doctor waiting section.
+		// There may be one Patient waiting for the Doctor.
+		// Start of section 1 in Doctor();
+		doctorWaitingLock[index]->Acquire();
+		if(doctorWaitingCount[index] > 0){
+			// One Patient already here.
+			// Wake him up.
+			doctorWaitingCV[index]->Signal(doctorWaitingLock[index]);
+			doctorWaitingCount--;
+			doctorState[index] = D_BUSY;
+		}else{
+			// No Patient is here.
+			doctorState[index] = D_FREE;
+		}
+		////////////////////////////////////////////
+		// Try to enter the Doctor interact section.
+		// There may be one Patient to interact with the Doctor.
+		// Start of section 2 in Doctor().
+		doctorInteractLock[index]->Acquire();
+		// Leave the Doctor waiting section.
+		// End of section 2 in Doctor().
+		doctorWaitingLock[index]->Release();
+		
+		//////////////////////////////////////////
+		// Begin the interaction with one Patient.
+		// 2 different kinds of task, T_FIRST (the first time the Doctor sees the Patient), 
+		// T_SECOND (the second time the Doctor sees the Patient).
+		// Task 1:
+		// 	1: Doctor waits for the Nurse to inform there is a Patient ready to be examined.
+		// 	2: Doctor reads the Examination Sheet and randomly gives Xray or shot. 
+		//	3:  
+		// Task 2:
+		if(T_FIRST == doctorTask[index]){
+			fprintf(stdout, "Doctor waits for the Nurse to inform there is a Patient ready to be examined.\n");
+			doctorInteractCV[index]->Wait(doctorInteractLock[index]);
+			ExamSheet* examSheet; 
+			int result = rand() % 4;
+			if(0 == result){	// need an Xray.
+				int images = rand() % 3;
+				fprintf(stdout, "Doctor tells the Patient to have an Xray.\n");
+				examSheet->xray = true;
+				examSheet->numberOfXray = images + 1;
+			}else if(1 == result){	// need a shot.
+				fprintf(stdout, "Doctor tells the Patient to have a shot.\n");
+				examSheet->shot = true;
+			}else{	// fine and can leave.
+				fprintf(stdout, "Doctor tells the Patient he is fine and can leave.\n");
+			}
+			doctorInteractCV[index]->Signal(doctorInteractLock[index]);
+		}else if(T_SECOND == doctorTask[index]){
+			fprintf(stdout, "Doctor waits for the Nurse to give the Examination Sheet.\n");
+			doctorInteractCV[index]->Wait(doctorInteractLock[index]);
+			fprintf(stdout, "Doctor tells the results to the Patient.\n");
+			doctorInteractCV[index]->Signal(doctorInteractLock[index]);
+		}
+		
+		/////////////////////////////////////
+		// Leave the Doctor interact section.
+		// End of section 2 in Doctor().
+		doctorInteractLock[index]->Release(doctorInteractLock[index]);
 	}
 }
 
@@ -163,8 +234,8 @@ void XrayTechnician(unsigned int index)
 		// End of section 1 in XrayTechnician().
 		xrayWaitingLock[index]->Release();
 		
-		//////////////////////////////////////
-		// Begin the interaction with Patient.
+		//////////////////////////////////////////
+		// Begin the interaction with one Patient.
 		// 1: Xray Technician waits for the Examination Sheet from the Nurse.
 		// 2: Xray Technician gets the Examinatin Sheet.
 		// 3: Xray Technician waits the Nurse to leave.
