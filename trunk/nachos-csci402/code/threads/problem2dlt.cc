@@ -36,7 +36,7 @@ int numberOfChildren;
 //
 //----------------------------------------------------------------------
 
-void init()
+void Init()
 {
 
 }
@@ -59,6 +59,7 @@ enum Doctor_Task{
 };
 Doctor_State doctorState[MAX_DOCTOR];
 Doctor_Task doctorTask[MAX_DOCTOR];
+ExamSheet* examSheetDoctor[MAX_DOCTOR];	// the current Examination Sheet from the Patient in Doctor().
 void Doctor(unsigned int index)
 {
 	while(true){
@@ -93,21 +94,21 @@ void Doctor(unsigned int index)
 		// Task 1:
 		// 	1: Doctor waits for the Nurse to inform there is a Patient ready to be examined.
 		// 	2: Doctor reads the Examination Sheet and randomly gives Xray or shot. 
-		//	3:  
 		// Task 2:
+		//	1: Doctor waits for the Nurse to give the Exmination Sheet.
+		//	2: Doctor tells the results to the Patient.
 		if(T_FIRST == doctorTask[index]){
 			fprintf(stdout, "Doctor waits for the Nurse to inform there is a Patient ready to be examined.\n");
 			doctorInteractCV[index]->Wait(doctorInteractLock[index]);
-			ExamSheet* examSheet; 
 			int result = rand() % 4;
 			if(0 == result){	// need an Xray.
 				int images = rand() % 3;
 				fprintf(stdout, "Doctor tells the Patient to have an Xray.\n");
-				examSheet->xray = true;
-				examSheet->numberOfXray = images + 1;
+				examSheetDoctor[index]->xray = true;
+				examSheetDoctor[index]->numberOfXray = images + 1;
 			}else if(1 == result){	// need a shot.
 				fprintf(stdout, "Doctor tells the Patient to have a shot.\n");
-				examSheet->shot = true;
+				examSheetDoctor[index]->shot = true;
 			}else{	// fine and can leave.
 				fprintf(stdout, "Doctor tells the Patient he is fine and can leave.\n");
 			}
@@ -140,6 +141,7 @@ enum Cashier_State{
 	C_BUSY, C_FREE
 };
 Cashier_State cashierState;
+ExamSheet* examSheetCashier;	// the current Examination Sheet from the Patient in Cashier().
 void Cashier(unsigned int index)
 {
 	while(true){
@@ -172,7 +174,7 @@ void Cashier(unsigned int index)
 		// Begin the interaction with one Patient.
 		// 1: Cashier waits for the Examination Sheet from the Patient.
 		// 2: Cashier reads and determines the Patient's bill, and tell the 
-		//    Patient how much should pay.
+		//    Patient how much he should pay.
 		// 3: Cashier waits for the Patient to pay.
 		// 4: Cashier gives the Patient a receipt.
 		// 5: Cashier waits for the Patient to leave.
@@ -209,6 +211,7 @@ enum Xray_State{
 	X_BUSY, X_FREE
 };
 Xray_State xrayState[MAX_XRAY];
+ExamSheet* examSheetXray[MAX_XRAY];	// the current Examination Sheet from the Patient in XrayTechnician().
 void XrayTechnician(unsigned int index)
 {
 	while(true){
@@ -247,13 +250,12 @@ void XrayTechnician(unsigned int index)
 		// 9: Xray Technician gives the Examination Sheet to the Nurse.
 		// 10: Xray Technician waits for the Nurse and Patient to leave the Xray room.
 		fprintf(stdout, "Xray Technician waits for the Examination Sheet from the Nurse.\n");
-		xrayInteractCV[index]->Wait(xrayInteractLock[index]);
-		ExamSheet* examSheet; 
+		xrayInteractCV[index]->Wait(xrayInteractLock[index]); 
 		fprintf(stdout, "Xray Technician gets the Examination Sheet.\n");
 		xrayInteractCV[index]->Signal(xrayInteractLock[index]);
 		fprintf(stdout, "Xray Technician waits the Nurse to leave.\n");
 		xrayInteractCV[index]->Wait(xrayInteractLock);
-		for(int i = 0; i < examSheet->numberOfXray; ++i){
+		for(int i = 0; i < examSheetXray[index]->numberOfXray; ++i){
 			if(0 == i)	fprintf(stdout, "Xray Technician asks the Patient to get onto the table.\n");
 			else fprintf(stdout, "Xray Technician asks the Patient to move.\n");
 			xrayInteractCV[index]->Signal(xrayInteractLock[index]);
@@ -262,9 +264,9 @@ void XrayTechnician(unsigned int index)
 			xrayInteractCV[index]->Wait(xrayInteractLock[index]);
 			// Random the Xray result.
 			int result = rand() % 3;
-			if(0 == result) examSheet->xrayImage[i] = "nothing";
-			else if(1 == result) examSheet->xrayImage[i] = "break";
-			else if(2 == result) examSheet->xrayImage[i] = "compound fracture";
+			if(0 == result) examSheetXray[index]->xrayImage[i] = "nothing";
+			else if(1 == result) examSheetXray[index]->xrayImage[i] = "break";
+			else if(2 == result) examSheetXray[index]->xrayImage[i] = "compound fracture";
 			fprintf(stdout, "Xray Technician takes an Xray.\n");
 			xrayInteractCV[index]->Signal(xrayInteractLock[index]);
 		}
@@ -275,11 +277,71 @@ void XrayTechnician(unsigned int index)
 		fprintf(stdout, "Xray Technician waits for the Nurse and Patient to leave the Xray room.\n");
 		xrayInteractCV[index]->Wait(xrayInteractLock[index]);
 		
-		////////////////////////////////////////////////////////
-		// Leave the Xray Technician interact section in roomID.
+		///////////////////////////////////////////////////////////////////////
+		// Leave the Xray Technician interact section in XrayTechnician[index].
 		// End of section 2 in XrayTechnician().
 		xrayInteractLock[index]->Release();
 	}
+}
+
+//----------------------------------------------------------------------
+// Test1
+//
+//
+//----------------------------------------------------------------------
+void Test1()
+{
+
+}
+
+//----------------------------------------------------------------------
+// Test2
+//
+//
+//----------------------------------------------------------------------
+void Test2()
+{
+
+}
+
+//----------------------------------------------------------------------
+// Test3
+//
+//
+//----------------------------------------------------------------------
+void Test3()
+{
+
+}
+
+//----------------------------------------------------------------------
+// Test4
+//
+//
+//----------------------------------------------------------------------
+void Test4()
+{
+
+}
+
+//----------------------------------------------------------------------
+// Test5
+//
+//
+//----------------------------------------------------------------------
+void Test5()
+{
+
+}
+
+//----------------------------------------------------------------------
+// Test6
+//
+//
+//----------------------------------------------------------------------
+void Test6()
+{
+
 }
 
 //----------------------------------------------------------------------
@@ -289,5 +351,54 @@ void XrayTechnician(unsigned int index)
 //----------------------------------------------------------------------
 void Problem2()
 {
-	init();
+	Init();
+	fprintf(stdout, "The Number of Doctors = %d\n", numberOfDoctors);
+	fprintf(stdout, "The Number of Nurses = %d\n", numberOfNurses);
+	fprintf(stdout, "The Number of Waiting Room Nurses = %d\n", numberOfWRNs);
+	fprintf(stdout, "The Number of Cashiers = %d\n", numberOfCashiers);
+	fprintf(stdout, "The Number of Xray Technicians = %d\n", numberOfXrays);
+	fprintf(stdout, "The Number of Adult Patients = %d\n", numberOfAdults);
+	fprintf(stdout, "The Number of Child Patients = %d\n", numberOfChildren);
+	
+	// Fork Doctors.
+	for(int i = 0; i < numberOfDoctors; ++i){
+		Thread* t = new Thread("Doctor");
+		t->Fork(Doctor, i);
+	}
+	
+	// Fork Nurses.
+	for(int i = 0; i < Nurses; ++i){
+		Thread* t = new Thread("Nurse");
+		t->Fork(Nurse, i);
+	}
+	
+	// Fork Waiting Room Nurses.
+	for(int i = 0; i < numberOfWRNs; ++i){
+		Thread* t = new Thread("Waiting Room Nurse");
+		t->Fork(WaitingRoomNurse, i);
+	}
+	
+	// Fork Cashiers.
+	for(int i = 0; i < numberOfCashiers; ++i){
+		Thread* t = new Thread("Cashier");
+		t->Fork(Cashier, i);
+	}
+	
+	// Fork Xray Technicians.
+	for(int i = 0; i < numberOfXrays; ++i){
+		Thread* t = new Thread("XrayTechnician");
+		t->Fork(XrayTechnician, i);
+	}
+	
+	// Fork Adult Patients.
+	for(int i = 0; i < numberOfAdults; ++i){
+		Thread* t = new Thread("");
+		t->Fork(, i);
+	}
+	
+	// Fork Child Patients.
+	for(int i = 0; i < numberOfChildren; ++i){
+		Thread* t = new Thread("");
+		t->Fork(, i);
+	}
 }
