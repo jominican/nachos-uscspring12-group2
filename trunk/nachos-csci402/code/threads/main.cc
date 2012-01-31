@@ -94,8 +94,8 @@ main(int argc, char **argv)
 		//ThreadTest();
         if (!strcmp(*argv, "-T"))               // Test Suite: link for this code is at the bottom of part 1 description
             TestSuite();
-//        if (!strcmp(*argv, "-P2"))               // Problem 2: for part 2
-//            Problem2();
+        if (!strcmp(*argv, "-P2"))               // Problem 2: for part 2
+            Problem2();
 #endif
 
 #ifdef USER_PROGRAM
