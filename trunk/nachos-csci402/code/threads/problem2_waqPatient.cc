@@ -24,6 +24,7 @@ struct ExamSheet{
 	bool shot;
 	float price;
 	char* result;
+	bool goToCashier;
 };
 
 #define MAX_DOCTOR 3
@@ -57,7 +58,7 @@ bool WRNurseState;		// false if the waiting room nurse is free and true for busy
 int indexOfSheet; //monitor variable: the index of the sheet kept in WRN. initial Value: 0
 int indexOfPatient; //monitor variable: index Of Patient in the front of the waiting queue waiting for the nurse. initial value:0 
 int wrnPatientID;		//???
-int nurseTakeSheetID;
+List* nurseTakeSheetID;
 int examRoomDoctorID[MAX_NURSE];
 int examRoomNurseID[MAX_NURSE];
 int xrayRoomID[MAX_NURSE];
@@ -122,6 +123,9 @@ void WaitingRoomNurse (unsigned int index) {
 		
 		if (WRNurseTask == 0) {
 			wrnExamSheet = new ExamSheet();		//make a new exam sheet.
+			wrnExamSheet->xray = false;
+			wrnExamSheet->shot = false;
+			wrnExamSheet->goToCashier = false;
 			fprintf(stdout, "Waiting Room nurse gives a form to Adult patient [%d].", wrnPatientID);
 			WRInteractCV->Signal(WRInteractLock);		//tell the patient that she makes a new sheet.
 			WRInteractCV->Wait(WRInteractLock);		//wait for patient to tell her they get the sheet.
@@ -142,7 +146,8 @@ void WaitingRoomNurse (unsigned int index) {
 			{
 				//there are more registered patients than nurses
 				wrnExamSheet = examSheetArray[indexOfPatient++];
-				fprintf(stdout, "Waiting Room nurse gives examination sheet of patient[%d] to Nurse[%d].", wrnExamSheet->PatientID, nurseTakeSheetID);
+				int nurseTakeSheet_ID = *(nurseTakeSheetID->Remove());
+				fprintf(stdout, "Waiting Room nurse gives examination sheet of patient[%d] to Nurse[%d].", wrnExamSheet->PatientID, nurseTakeSheet_ID);
 				numOfNursesPassed++;
 				nextActionForNurse = 1; //tell nurse to go to pick up a patient;
 				nurseWrnCV->Signal(nurseWrnLock);
@@ -152,6 +157,7 @@ void WaitingRoomNurse (unsigned int index) {
 			else
 			{
 				//Wrn finds that there is no patient waiting for the nurse or there is enough nurses for the patient
+				int nurseTakeSheet_ID = *(nurseTakeSheetID->Remove());
 				nextActionForNurse = 0; //not go to pick patient
 				nurseWrnCV->Signal(nurseWrnLock);
 				//Wrn tries to release nurseWrnLock because there is no patient waiting
@@ -209,7 +215,7 @@ void Patient (unsigned int index) {
 	//patient goes away and fills the form
 	myExamSheet->patientID = patient_ID;		//write the patient id, his name, on the sheet.
 	srand(time(NULL));
-	myExamSheet->age = rand()%100+1;		//write the age of the patient on the sheet.
+	myExamSheet->age = rand() % 50 + 15;		//write the age of the patient on the sheet. Adult patient age should be larger than 15.
 	sprintf(patient_id, "%d ", patient_ID);
 	strcpy(patient_name, "Patient_");
 	strcat(patient_name, patient_id);
@@ -238,7 +244,7 @@ void Patient (unsigned int index) {
 	patientWaitNurseCount++;
 	WRInteractLock->Release();		//patient leaves the waiting room nurse
 	
-	fprintf(stdout, "Adult Patient [%d] waits for a Nurse to escort them to Exam room.", patient_ID);
+	//fprintf(stdout, "Adult Patient [%d] waits for a Nurse to escort them to Exam room.", patient_ID);
 	patientWaitNurseCV->Wait(patientWaitNurseLock);		//patient waits for a nurse come to escort him
 	if(nurseWaitPatientCount > 0)
 	{	//before leaving, wake up the next nurse in line to get prepared for escorting the next patient in line away
@@ -273,7 +279,7 @@ void Patient (unsigned int index) {
 	examRoomLock->Release();
 	examRoomCVArray[examRoom_id]->Wait(examRoomLockArray[examRoom_id]);		//get into a exam room and wait for a doctor, together with a nurse
 	
-	fprintf(stdout, "Adult Patient/Parent [%d] says, “My/His symptoms are Pain/Nausea/Hear Alien Voices”.", patient_ID)
+	fprintf(stdout, "Adult Patient/Parent [%d] says, “My/His symptoms are Pain/Nausea/Hear Alien Voices”.", patient_ID);
 	examRoomExamSheet[examRoom_id] = myExamSheet;		//turn over the exam sheet to the doctor
 	examRoomCVArray[examRoom_id]->Signal(examRoomLockArray[examRoom_id]);		
 	examRoomCVArray[examRoom_id]->Wait(examRoomLockArray[examRoom_id]);		
@@ -291,8 +297,12 @@ void Patient (unsigned int index) {
 		int examRoomNurse_id = examRoomNurseID[examRoom_id];		//record the nurse who takes patient away from the exam room for the first time
 		int xrayRoom_id = xrayRoomID[examRoom_id];		//the xray room he needs to go to
 		examRoomLockArray[examRoom_id]->Release();	
+		examRoomLock->Acquire();		//这是个公共大锁，有可能其他nurse在抢锁去查看exam room的状态，导致patient很久才acquire到这个锁
+		examRoomState[examRoom_id] = E_FREE;
+		examRoomLock->Release();
 		
-		xrayWaitingLock[xrayRoom_id]->Acquire;		
+		
+		xrayWaitingLock[xrayRoom_id]->Acquire();		
 		if (xrayState[xrayRoom_id] == X_BUSY) {		// the Xray technician is busy. then the patient gets in line
 			xrayWaitingCount[xrayRoom_id];++;
 			xrayWaitingCV[xrayRoom_id]->Wait(xrayWaitingLock[xrayRoom_id]);
@@ -323,6 +333,7 @@ void Patient (unsigned int index) {
 			i++;
 		}		//xray technician finishes taking xrays for the patient
 		
+		xrayInteractCV[xrayRoom_id]->Wait(xrayInteractLock[xrayRoom_id]);
 		fprintf(stdout, "Adult Patient [%d] waits for a Nurse to escort him/her to exam room", patinet_ID);
 		xrayCheckingLock->Acquired();		//同样抢锁的问题
 		xrayState[xrayRoom_id] == X_FINISH;
@@ -333,6 +344,7 @@ void Patient (unsigned int index) {
 		int examRoomSecondTime_id = examRoomSecondTimeID[xrayRoom_id];
 		xrayInteractLock[xrayRoom_id]->Release();
 		examRoomLockArray[examRoomSecondTime_id]->Acquire();
+		//myExamSheet->goToCashier = true;
 		examRoomExamSheet[examRoomSecondTime_id] = myExamSheet;
 		examRoomLock->Acquire();		//同样抢锁的问题
 		examRoomState[examRoomSecondTime_id] = E_READY;
@@ -340,13 +352,20 @@ void Patient (unsigned int index) {
 		examRoomLock->Release();
 		examRoomCVArray[examRoomSecondTime_id]->Wait(examRoomLockArray[examRoomSecondTime_id]);		//get into a exam room and wait for a doctor, together with a nurse
 		
+		examRoomCVArray[examRoomSecondTime_id]->Signal(examRoomLockArray[examRoomSecondTime_id]);	
+		examRoomCVArray[examRoomSecondTime_id]->Wait(examRoomLockArray[examRoomSecondTime_id]);	
 		fprintf(stdout, "Adult Patient [%d] has been diagnosed by Doctor [%d].", patinet_ID, examRoomDoctorID[examRoomSecondTime_id]);
 		examRoomLock->Acquire();
 		examRoomState[examRoomSecondTime_id] = E_FINISH;
 		examRoomLock->Release();
 		//the patient waits for a third nurse to take him/her to the cashier
+		myExamSheet->goToCashier = true;
+		examRoomExamSheet[examRoomSecondTime_id] = myExamSheet;
 		examRoomCVArray[examRoomSecondTime_id]->Wait(examRoomLockArray[examRoomSecondTime_id]);
 		examRoomCVLock[examRoomSecondTime_id]->Release();
+		examRoomLock->Acquire();		//这是个公共大锁，有可能其他nurse在抢锁去查看exam room的状态，导致patient很久才acquire到这个锁
+		examRoomState[examRoomSecondTime_id] = E_FREE;
+		examRoomLock->Release();
 	}
 	else if (myExamSheet->shot) {		//the patient needs a shot
 		fprintf(stdout, "Adult Patient [%d] has been diagnosed by Doctor [%d].", patinet_ID, examRoomDoctorID[examRoom_id]);
@@ -359,8 +378,13 @@ void Patient (unsigned int index) {
 		fprintf(stdout, "Adult Patient/Parent [%d] says, “Yes I am/He is ready for the shot”.", patinet_ID);
 		examRoomCVArray[examRoom_id]->Signal(examRoomLockArray[examRoom_id]);
 		//the patient waits for the nurse to take him/her to the cashier
+		myExamSheet->goToCashier = true;
+		examRoomExamSheet[examRoom_id] = myExamSheet;
 		examRoomCVArray[examRoom_id]->Wait(examRoomLockArray[examRoom_id]);
 		examRoomCVLock[examRoom_id]->Release();
+		examRoomLock->Acquire();		//这是个公共大锁，有可能其他nurse在抢锁去查看exam room的状态，导致patient很久才acquire到这个锁
+		examRoomState[examRoom_id] = E_FREE;
+		examRoomLock->Release();
 	}
 	else {		//the patient has no problem and can go to the cashier directly
 		fprintf(stdout, "Adult Patient [%d] has been diagnosed by Doctor [%d].", patinet_ID, examRoomDoctorID[examRoom_id]);
@@ -368,14 +392,19 @@ void Patient (unsigned int index) {
 		examRoomState[examRoom_id] = E_FINISH;
 		examRoomLock->Release();
 		//the patient waits for a second nurse to take him/her to the cashier
+		myExamSheet->goToCashier = true;
+		examRoomExamSheet[examRoom_id] = myExamSheet;
 		examRoomCVArray[examRoom_id]->Wait(examRoomLockArray[examRoom_id]);
 		examRoomCVLock[examRoom_id]->Release();
+		examRoomLock->Acquire();		//这是个公共大锁，有可能其他nurse在抢锁去查看exam room的状态，导致patient很久才acquire到这个锁
+		examRoomState[examRoom_id] = E_FREE;
+		examRoomLock->Release();
 	}
 
 	//patient is escorted to the cashier.
 	cashierWaitingLock->Acquire();		
 	if (cashierState == C_BUSY) {		
-		cashierWaitingCount;++;
+		cashierWaitingCount++;
 		fprintf(stdout, "Adult Patient [%d] enters the queue for Cashier.", patinet_ID);
 		cashierWaitingCV->Wait(cashierWaitingLock);
 	}else {
