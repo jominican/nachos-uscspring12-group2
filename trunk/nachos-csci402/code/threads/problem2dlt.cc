@@ -33,16 +33,71 @@ int numberOfAdults;
 int numberOfChildren;
 int numberOfParents;
 
+int* childToParent;
 //----------------------------------------------------------------------
 // Init
 //	Initialize all of the global variables.
 //	Locks.
 //	Condition Variables.
 //	Monitor Variables.
+//	Entity State.
 //----------------------------------------------------------------------
 void Init()
 {
-
+	// Initialize the Doctor().
+	examRoomLock = new Lock("examRoomLock");
+	examRoomCheckingLock = new Lock("examRoomCheckingLock");
+	for(int i = 0; i < MAX_NURSE; ++i){
+		examRoomLockArray[i] = new Lock("examRoomLock");
+	}
+	examRoomCV = new Condition("examRoomCV");
+	for(int i = 0; i < MAX_NURSE; ++i){
+		examRoomCVArray[i] = new Condition("examRoomCVArray");
+	}
+	for(int i = 0; i < MAX_NURSE; ++i){
+		examRoomState[i] = E_FREE;
+	}
+	for(int i = 0; i < MAX_NURSE; ++i){
+		examRoomTask[i] = E_FIRST;
+	}
+	
+	// Initialize the Cashier().
+	cashierWaitingCount = 0;
+	cashierWaitingLock = new Lock("cashierWaitingLock");
+	cashierInteractLock = new Lock("cashierInteractLock");
+	cashierWaitingCV = new Condition("cashierWaitingCV");
+	cashierInteractCV = new Condition("cashierInteractCV");
+	cashierState = C_FREE;
+	
+	// Initialize the XrayTechnician().
+	for(int i = 0; i < MAX_XRAY; ++i){
+		xrayWaitingCount[i] = 0;
+	}	
+	xrayCheckingLock = new Lock("xrayCheckingLock");
+	for(int i = 0; i < MAX_XRAY; ++i){
+		xrayWaitingLock[i] = new Lock("xrayWaitingLock");
+	}
+	for(int i = 0; i < MAX_XRAY; ++i){
+		xrayInteractLock[i] = new Lock("xrayInteractLock");
+	}
+	for(int i = 0; i < MAX_XRAY; ++i){
+		xrayWaitingCV[i] = new Condition("xrayWaitingCV");
+	}
+	for(int i = 0; i < MAX_XRAY; ++i){
+		xrayInteractCV[i] = new Condition("xrayInteractCV");
+	}
+	for(int i = 0; i < MAX_XRAY; ++i){
+		xrayState[i] = X_FREE;
+	}
+	
+	// Initialize the Waiting Room Nurse().
+	
+	// Initialize the Nurse().
+	
+	// Initialize the Patient().
+	childToParent = new int[numberOfPatients];
+	
+	// Initialize the Parent().
 }
 
 //----------------------------------------------------------------------
@@ -52,8 +107,8 @@ void Init()
 //----------------------------------------------------------------------
 int examRoomDoctorID[MAX_NURSE];
 int examRoomPatientID[MAX_NURSE];
-Lock* doctorCheckingLock;	// for Doctors to check the E_READY of the Examination Room.
 Lock* examRoomLock;
+Lock* examRoomCheckingLock;	// for Doctors to check the E_READY of the Examination Room.
 Lock* examRoomLockArry[MAX_NURSE];
 Condition* examRoomCV;
 Condition* examRoomCVArray[MAX_NURSE];
@@ -63,20 +118,21 @@ enum ExamRoom_State{
 enum ExamRoom_Task{
 	E_FIRST, E_SECOND	// the first or the second time the Patient meets with the Doctor.
 };
-examRoom_Task examRoomTask[MAX_NURSE];
+ExamRoom_State examRoomState[MAX_NURSE];
+ExamRoom_Task examRoomTask[MAX_NURSE];
 ExamSheet* examRoomExamSheet[MAX_NURSE];	// the current Examination Sheet from the Patient in Doctor().
 void Doctor(unsigned int index)
 {
 	while(true){
 		// Check for the state of the Examination Rooms.
-		doctorCheckingLock->Acquire();
+		examRoomCheckingLock->Acquire();
 		int roomIndex = -1;
 		for(int i = 0; i < numberOfNurses; ++i){
 			if(E_READY == examRoomState[i]){
 				roomIndex = i; break;
 			}
 		}
-		doctorCheckingLock->Release();
+		examRoomCheckingLock->Release();
 		
 		// There is one room ready for the Doctor.
 		if(roomIndex != -1){
@@ -92,11 +148,11 @@ void Doctor(unsigned int index)
 				if(0 == result){	// need an Xray.
 					int images = rand() % 3;
 					fprintf(stdout, "Doctor [%d] notes down in the sheet that Xray is needed for [Adult/Child] Patient [%d].\n", index, examRoomPatientID[roomIndex]);
-					examRoomExamSheet[index]->xray = true;
-					examRoomExamSheet[index]->numberOfXray = images + 1;
+					examRoomExamSheet[roomIndex]->xray = true;
+					examRoomExamSheet[roomIndex]->numberOfXray = images + 1;
 				}else if(1 == result){	// need a shot.
 					fprintf(stdout, "Doctor [%d] notes down in the sheet that [Adult/Child] Patient [%d] needs to be given a shot.\n", index, examRoomPatientID[roomIndex]);
-					examRoomExamSheet[index]->shot = true;
+					examRoomExamSheet[roomIndex]->shot = true;
 				}else{	// fine and can leave.
 					fprintf(stdout, "Doctor [%d] diagnoses [Adult/Child] Patient [%d] to be fine and is leaving the examination room.\n", index, examRoomPatientID[roomIndex]);
 				}
@@ -237,9 +293,9 @@ void XrayTechnician(unsigned int index)
 			xrayInteractCV[index]->Wait(xrayInteractLock[index]);
 		}
 		fprintf(stdout, "X-ray Technician [%d] calls Nurse [%d].\n", index);
+		xrayInteractCV[index]->Signal(xrayInteractLock[index]);
 		xrayInteractCV[index]->Wait(xrayInteractLock[index]);
 		fprintf(stdout, "X-ray Technician [%d] hands over examination sheet of Adult/Child Patient [%d] to Nurse [%d].\n", index, xrayPatientID[index]);
-		xrayInteractCV[index]->Signal(xrayInteractLock[index]);
 		
 		///////////////////////////////////////////////////////////////////////
 		// Leave the Xray Technician interact section in XrayTechnician[index].
@@ -250,8 +306,8 @@ void XrayTechnician(unsigned int index)
 
 //----------------------------------------------------------------------
 // Test1
-//
-//
+//	Test goal: Child Patients are never abandoned by their Parent, nor go 
+//	anywhere without their Parent.
 //----------------------------------------------------------------------
 void Test1()
 {
@@ -260,8 +316,8 @@ void Test1()
 
 //----------------------------------------------------------------------
 // Test2
-//
-//
+//	Test goal: Waiting Room Nurses only talk to 
+//	one Patient/Parent at a time.
 //----------------------------------------------------------------------
 void Test2()
 {
@@ -270,7 +326,7 @@ void Test2()
 
 //----------------------------------------------------------------------
 // Test3
-//
+//	Test goal: Cashiers only talk to one Patient/Parent at a time.
 //
 //----------------------------------------------------------------------
 void Test3()
@@ -280,8 +336,8 @@ void Test3()
 
 //----------------------------------------------------------------------
 // Test4
-//
-//
+//	Test goal: Patients/Parents never go anywhere 
+//	without being escorted by a Nurse.
 //----------------------------------------------------------------------
 void Test4()
 {
@@ -290,8 +346,8 @@ void Test4()
 
 //----------------------------------------------------------------------
 // Test5
-//
-//
+//	Test goal: All Patients leave the Doctor's Office. No one stays in 
+//	the Waiting Room, Examination Room, or Xray Room, forever.
 //----------------------------------------------------------------------
 void Test5()
 {
@@ -300,8 +356,8 @@ void Test5()
 
 //----------------------------------------------------------------------
 // Test6
-//
-//
+//	Test goal: Two Doctors never examine the same Patient 
+//	at the same time.
 //----------------------------------------------------------------------
 void Test6()
 {
@@ -315,7 +371,26 @@ void Test6()
 //----------------------------------------------------------------------
 void Problem2()
 {
+	// Initialize the Locks, Condition Variables, Monitor Variables
+	// and the initial state of each entity.
 	Init();
+	
+	fprintf(stdout, "Choose the test case for the part 2.\n");
+	fprintf(stdout, "For the System Test, press 0.\n");
+	fprintf(stdout, "For the Simple Test for the requirement 1-6, press the corressponding number from 1-6.\n");
+	int input = -1;
+	scanf("%d", &input);
+	switch(input){
+		case 1: Test1(); break;
+		case 2: Test2(); break;
+		case 3: Test3(); break;
+		case 4: Test4(); break;
+		case 5: Test5(); break;
+		case 6: Test6(); break;
+	}
+	if(input != 0) return;	// when input is 0, System Test.
+	
+	// Wait for the input from the command line.
 	fprintf(stdout, "Number of Doctors = ?\n");
 	scanf("%d", &numberOfDoctors);
 	fprintf(stdout, "Number of Nurses = ?\n");
@@ -324,6 +399,30 @@ void Problem2()
 	scanf("%d", &numberOfXrays);
 	fprintf(stdout, "Number of Patients = ?\n");
 	scanf("%d", &numberOfPatients);
+	
+	// Initialize the numbers of all entities.
+	numberOfExamRooms = numberOfNurses;
+	numberOfWRNs = numberOfCashier = 1;
+	numberOfAdults = numberOfPatients / 2; // make the numbers of Adult Patients and Child Patients as equal as possible.
+	numberOfChildren = numberOfParents = numberOfPatients - numberOfAdults;
+	
+	// Check the validation of the input.
+	if(numberOfDoctors != 2 && numberOfDocrots != 3){
+		fprintf(stdout, "The interval of the number of the Doctors is [2, 3].\n");
+		return;
+	}
+	if(numberOfNurses < 2 || numberOfNurses > 5){
+		fprintf(stderr, "The interval of the number of the Nurses is [2, 5].\n");
+		return;
+	}
+	if(numberOfXrays != 1 || numberOfXray != 2){
+		fprintf(stderr, "The interval of the number of the Xray Technicians is [1, 2].\n");
+		return;
+	}
+	if(numberOfPatients < 30){
+		fprintf(stderr, "The interval of the number of the Patients is [30, MAX_INTEGER).\n");
+		return;
+	}
 	
 	// Fork Doctors.
 	for(int i = 0; i < numberOfDoctors; ++i){
@@ -372,4 +471,7 @@ void Problem2()
 		Thread* t = new Thread("Parent");
 		t->Fork(Parent, i);
 	}
+	
+	//////////////////
+	// Wait to finish.
 }
