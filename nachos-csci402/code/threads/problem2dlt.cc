@@ -13,7 +13,6 @@ struct ExamSheet{
 	int   patientID;	// binded with the Patient.
 	int   age;
 	char* name;
-	int   doctorID;	// binded with the Doctor.
 	bool  xray;
 	int   xrayID;	// binded with the Xray Technician.
 	int   numberOfXray;
@@ -26,10 +25,10 @@ struct ExamSheet{
 int numberOfDoctors;
 int numberOfNurses;
 int numberOfExamRooms;
-int numberOfWRNs;	// waiting room nurse.
-int numberOfCashiers;
+int numberOfWRNs;	// waiting room nurse (1).
+int numberOfCashiers;	// 1.
 int numberOfXrays;
-int numberOfPatients;
+int numberOfPatients;	// Patients = Adults + Children.
 int numberOfAdults;
 int numberOfChildren;
 int numberOfParents;
@@ -37,9 +36,10 @@ int numberOfParents;
 //----------------------------------------------------------------------
 // Init
 //	Initialize all of the global variables.
-//
+//	Locks.
+//	Condition Variables.
+//	Monitor Variables.
 //----------------------------------------------------------------------
-
 void Init()
 {
 
@@ -50,17 +50,18 @@ void Init()
 //
 //
 //----------------------------------------------------------------------
-int doctorWaitingCount[MAX_DOCTOR];
-int doctorNurseIndex[MAX_DOCTOR];
+int examRoomDoctorID[MAX_NURSE];
+int examRoomPatientID[MAX_NURSE];
+Lock* doctorCheckingLock;	// for Doctors to check the E_READY of the Examination Room.
 Lock* examRoomLock;
-Lock* examRoomLockArrry[MAX_NURSE];
+Lock* examRoomLockArry[MAX_NURSE];
 Condition* examRoomCV;
 Condition* examRoomCVArray[MAX_NURSE];
 enum ExamRoom_State{
-	E_BUSY, E_FREE, E_READY, E_FINISH
+	E_BUSY, E_FREE, E_READY, E_FINISH	// E_READY: the Examination Room is ready for Doctor; E_FINISH: the Examination Room is ready (finish) for Nurse.
 };
 enum ExamRoom_Task{
-	E_FIRST, E_SECOND
+	E_FIRST, E_SECOND	// the first or the second time the Patient meets with the Doctor.
 };
 examRoom_Task examRoomTask[MAX_NURSE];
 ExamSheet* examRoomExamSheet[MAX_NURSE];	// the current Examination Sheet from the Patient in Doctor().
@@ -71,7 +72,7 @@ void Doctor(unsigned int index)
 		doctorCheckingLock->Acquire();
 		int roomIndex = -1;
 		for(int i = 0; i < numberOfNurses; ++i){
-			if(examRoomState[i] = E_READY){
+			if(E_READY == examRoomState[i]){
 				roomIndex = i; break;
 			}
 		}
@@ -83,7 +84,7 @@ void Doctor(unsigned int index)
 			// Wake up the waiting Patient and Nurse.
 			examRoomDoctorID[roomIndex] = index;	// set the Doctor ID for the current Examination Room.
 			examRoomCVArray[roomIndex]->Broadcast(examRoomLockArray[roomIndex]);
-			examRoomCVArray[roomIndex]->Wait(examRoomLockArray[roomIndex]);
+			examRoomCVArray[roomIndex]->Wait(examRoomLockArray[roomIndex]);	// wait to be waked up by the Patient.
 	
 			if(E_FIRST == examRoomTask[roomIndex]){
 				fprintf(stdout, "Doctor [%d] is reading the examination sheet of [Adult/Child] Patient [%d].\n", index, examRoomPatientID[roomIndex]);
@@ -101,14 +102,15 @@ void Doctor(unsigned int index)
 				}
 				examRoomLockArray[roomIndex]->Signal(examRoomLockArray[roomIndex]);
 			}else if(E_SECOND == examRoomTask[roomIndex]){
-				fprintf(stdout, "Doctor [%d] is examining the Xrays of [Adult/Child] Patient [].\n", index);
-				fprintf(stdout, "Doctor [%d] has left the examination room.", index);
+				fprintf(stdout, "Doctor [%d] is examining the Xrays of [Adult/Child] Patient [%d].\n", index, examRoomPatientID[roomIndex]);
+				fprintf(stdout, "Doctor [%d] has left the examination room.\n", index);
 				examRoomLockArray[roomIndex]->Signal(examRoomLockArray[roomIndex]);
 			}
-			
+			// Loop into the next iteration.
 			examRoomLockArray[roomIndex]->Release();
 		}else{	// No room is ready for the Doctor.
 			// Avoid busy waiting.
+			currentThread->Yield();
 		}
 	}
 }
@@ -170,7 +172,6 @@ void Cashier(unsigned int index)
 		cashierInteractCV->Signal(cashierInteractLock);
 		cashierInteractCV->Wait(cashierInteractLock);
 		
-		cashierState = C_FREE;
 		//////////////////////////////////////
 		// Leave the Cashier interact section.
 		// End of section 2 in Cashier().
