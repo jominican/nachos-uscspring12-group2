@@ -166,6 +166,9 @@ Cashier_State cashierState;
 WRNurse_Task WRNurseTask;
 ExamRoom_Task examRoomTask[MAX_NURSE];
 
+// the current remaining Patient number.
+int remainPatientCount;
+
 //----------------------------------------------------------------------
 // Init
 //	Initialize all of the global variables.
@@ -269,7 +272,7 @@ void Init()
 //----------------------------------------------------------------------
 void Doctor(int index)
 {
-	while(true){
+	while(remainPatientCount){
 		// Check for the state of the Examination Rooms.
 		examRoomCheckingLock->Acquire();
 		int roomIndex = -1;
@@ -325,9 +328,9 @@ void Doctor(int index)
 void Nurse(int index)
 {
     ExamSheet* patientExamSheet;
-    while(true)
+    while(remainPatientCount)
 	{
-	    fprintf(stdout, "Nurse %d tries to check if there is examRoom available.\n", index);
+	    //fprintf(stdout, "Nurse %d tries to check if there is examRoom available.\n", index);
 		examRoomLock->Acquire();	// go to see if there is any Doctor/Examination Room available.
 		int i = 0;
 	    for(; i < numberOfNurses; ++i)	// check to see which Examination Room is avaiable.
@@ -337,13 +340,13 @@ void Nurse(int index)
 			}
         if(i == numberOfNurses)	// no Examination Room is availble at this time.
 		{
-		    fprintf(stdout, "Nurse %d doesn't find any available examinationRoom, so, he/she releases the allExamRoomLock.\n");
+		    //fprintf(stdout, "Nurse %d doesn't find any available examinationRoom, so, he/she releases the allExamRoomLock.\n");
 		    examRoomLock->Release();
 		}
 		else
 		{		    
 			examRoomState[i] = E_BUSY;
-			fprintf(stdout, "Nurse %d tries to get the lock of examRoom %d.\n", index,i);
+			//fprintf(stdout, "Nurse %d tries to get the lock of examRoom %d.\n", index,i);
 			examRoomLock->Release();
 			nurseWrnLock->Acquire();
 			nurseTakeSheetID->Append((void *)&index);
@@ -569,8 +572,7 @@ void Nurse(int index)
 //----------------------------------------------------------------------
 void WaitingRoomNurse(int index) {
 	
-	while (true) {
-		
+	while (remainPatientCount) {
 		WRLock->Acquire();	
 		if (patientWaitingCount > 0) {		// a Patient is in line.
 			patientWaitingCV->Signal(WRLock);		// the Waiting Room Nurse wake a Patient up.
@@ -645,7 +647,7 @@ void WaitingRoomNurse(int index) {
 //----------------------------------------------------------------------
 void Cashier(int index)
 {
-	while(true){
+	while(remainPatientCount){
 		////////////////////////////////////////////
 		// Try to enter the Cashier waiting section.
 		// There may be some Patients waiting for the Cashier.
@@ -698,7 +700,7 @@ void Cashier(int index)
 //----------------------------------------------------------------------
 void XrayTechnician(int index)
 {
-	while(true){
+	while(remainPatientCount){
 		/////////////////////////////////////////
 		// Try to enter the Xray waiting section.
 		// Start of section 1 in XrayTechnician().
@@ -996,6 +998,7 @@ void Patient(int index) {
 	fprintf(stdout, "Adult Patient [%d] leaves the doctor's office.\n", patient_ID);
 	cashierInteractCV->Signal(cashierInteractLock);			
 	cashierInteractLock->Release();
+	remainPatientCount--;
 }
 
 //----------------------------------------------------------------------
@@ -1060,7 +1063,7 @@ void Test6(void)
 
 //----------------------------------------------------------------------
 // Problem2
-//
+//	The entrance of the Assignment 1 Problem 2.
 //
 //----------------------------------------------------------------------
 void Problem2(void)
@@ -1099,6 +1102,8 @@ void Problem2(void)
 	numberOfWRNs = numberOfCashiers = 1;
 	numberOfAdults = numberOfPatients / 2; // make the numbers of Adult Patients and Child Patients as equal as possible.
 	numberOfChildren = numberOfParents = numberOfPatients - numberOfAdults;
+	//remainPatientCount  = numberOfPatients;
+	remainPatientCount = numberOfAdults;
 	
 	// Check the validation of the input.
 	if(numberOfDoctors != 2 && numberOfDoctors != 3){
