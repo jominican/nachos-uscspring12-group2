@@ -5,8 +5,6 @@
  *
  */
 
-int fuck = 0;
-int shit = 0;
 ////////////////
 // Header files.
 #include "thread.h"
@@ -748,9 +746,7 @@ void XrayTechnician(int index)
 			// There is one room waiting for Xray Technician.
 			if(xrayWaitingCount[index] > 0){
 				xrayWaitingCV[index]->Signal(xrayWaitingLock[index]);
-				shit++;
-				fprintf(stdout, ">>>>>> SHIT [%d]\n", shit);
-				xrayWaitingCount[index]--;
+				--xrayWaitingCount[index];
 				xrayState[index] = X_BUSY;
 			}else{
 				xrayState[index] = X_FREE;
@@ -901,6 +897,7 @@ void Patient(int index) {
 	
 	fprintf(stdout, "Adult Patient/Parent [%d] says, “My/His symptoms are Pain/Nausea/Hear Alien Voices”.\n", patient_ID);
 	examRoomExamSheet[examRoom_id] = myExamSheet;		// turn over the exam sheet to the Doctor.
+	examRoomPatientID[examRoom_id ] = index;	// modified by Litao Deng.
 	examRoomCVArray[examRoom_id]->Signal(examRoomLockArray[examRoom_id]);		
 	examRoomCVArray[examRoom_id]->Wait(examRoomLockArray[examRoom_id]);		
 	myExamSheet = examRoomExamSheet[examRoom_id];		// Doctor finishes the first time Examination.
@@ -923,20 +920,15 @@ void Patient(int index) {
 		
 		xrayWaitingLock[xrayRoom_id]->Acquire();		
 		if (xrayState[xrayRoom_id] == X_BUSY || xrayState[xrayRoom_id] == X_FINISH) {		// the Xray Technician is BUSY or FINISH. then the Patient gets in line.
-			xrayWaitingCount[xrayRoom_id]++;
-			++fuck;
-			fprintf(stdout, "!!!!!!>>>>>>FUCK [%d]\n", fuck);
+			++xrayWaitingCount[xrayRoom_id];
 			xrayWaitingCV[xrayRoom_id]->Wait(xrayWaitingLock[xrayRoom_id]);
-			fprintf(stdout, "!!!~~~~get out of FUCK! [%d].\n", fuck);
 		}else {
 			xrayState[xrayRoom_id] = X_BUSY;
 		}
-		xrayWaitingLock[xrayRoom_id]->Release();	
+		xrayWaitingLock[xrayRoom_id]->Release();		
 		
-		fprintf(stdout, "!!!!!!>>>>>>>Patient [%d]  Count [%d]\n", patient_ID, xrayWaitingCount[xrayRoom_id]);
 		// the Patient enters the Xray Room.
 		xrayInteractLock[xrayRoom_id]->Acquire();
-		fprintf(stdout, ">>>>>>>!!!!!!Patient [%d]  Count [%d]\n", patient_ID, xrayWaitingCount[xrayRoom_id]);
 		fprintf(stdout, "Nurse [%d] informs X-Ray Technician [%d] about Adult/Child Patient [%d] and hands over the examination sheet.\n", examRoomNurse_id, xrayRoom_id, patient_ID);
 		fprintf(stdout, "Nurse [%d] leaves the X-ray Room [%d].\n", examRoomNurse_id, xrayRoom_id);
 		xrayExamSheet[xrayRoom_id] = myExamSheet;
