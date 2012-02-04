@@ -20,6 +20,7 @@
 
 //----------------------------------------------------------------------
 // Global data structures.
+
 //	1: Examination Sheet.
 //	2: Enumerations.
 //----------------------------------------------------------------------
@@ -106,12 +107,13 @@ int examRoomDoctorID[MAX_NURSE];
 int examRoomPatientID[MAX_NURSE];
 int examRoomSecondTimeID[MAX_XRAY];	// the ID for the Examination Room in the second visit.
 int xrayRoomID[MAX_XRAY];
-int xrayWaitingCount[MAX_XRAY];
+int xrayWaitCount[MAX_XRAY];
 int xrayPatientID[MAX_XRAY];
 int cashierWaitingCount;
 int cashierPatientID;
 int* childToParent;	// Child to corresponding Parent mapping (need to dynamically allocate).
 List* nurseTakeSheetID;
+List* xrayWaitList[MAX_XRAY];
 
 /////////////////////////
 // Locks for each entity.
@@ -208,6 +210,10 @@ void Init()
 	nurseWaitWrnCount = 0;
 	nextActionForNurse = 0;
 	nurseTakeSheetID = new List;
+	for(int i = 0; i < MAX_XRAY; ++i){
+		xrayWaitList[i] = new List;
+	}
+	
 	for(int i = 0; i < MAX_NURSE; ++i){
 		nurseLock[i] = new Lock("nurseLock");
 	}
@@ -246,7 +252,7 @@ void Init()
 	
 	// Initialize the XrayTechnician().
 	for(int i = 0; i < MAX_XRAY; ++i){
-		xrayWaitingCount[i] = 0;
+		xrayWaitCount[i] = 0;
 	}	
 	xrayCheckingLock = new Lock("xrayCheckingLock");
 	for(int i = 0; i < MAX_XRAY; ++i){
@@ -302,7 +308,7 @@ void Doctor(int index)
 			if(E_FIRST == examRoomTask[roomIndex]){
 				fprintf(stdout, "Doctor [%d] is reading the examination sheet of [Adult/Child] Patient [%d].\n", index, examRoomPatientID[roomIndex]);
 				int result = rand() % 4;
-				result = 0;
+				//result = 0;
 				if(0 == result){	// need an Xray.
 					int images = rand() % 3;
 					fprintf(stdout, "Doctor [%d] notes down in the sheet that Xray is needed for [Adult/Child] Patient [%d].\n", index, examRoomPatientID[roomIndex]);
@@ -741,14 +747,20 @@ void XrayTechnician(int index)
 		/////////////////////////////////////////
 		// Try to enter the Xray waiting section.
 		// Start of section 1 in XrayTechnician().
-		if(xrayWaitingCount[index] > 0){
+		//fprintf(stdout, "~~~1 XrayTechnician [%d] has xrayWaitCount [%d] in xray room [%d].\n", index, xrayWaitCount[index], index);
+		if(!xrayWaitList[index]->IsEmpty()){
+			//fprintf(stdout, "~~~2 XrayTechnician [%d] has xrayWaitingCount [%d] in xray room [%d].\n", index, xrayWaitCount[index], index);
 			xrayWaitingLock[index]->Acquire();
 			// There is one room waiting for Xray Technician.
-			if(xrayWaitingCount[index] > 0){
+			if(!xrayWaitList[index]->IsEmpty()){
+				//fprintf(stdout, "~~~3 XrayTechnician [%d] has xrayWaitingCount [%d] in xray room [%d].\n", index, xrayWaitCount[index], index);
 				xrayWaitingCV[index]->Signal(xrayWaitingLock[index]);
-				--xrayWaitingCount[index];
+				//fprintf(stdout, "~~~4 XrayTechnician [%d] has xrayWaitingCount [%d] in xray room [%d].\n", index, xrayWaitCount[index], index);
+				xrayWaitList[index]->Remove();
+				--xrayWaitCount[index];
 				xrayState[index] = X_BUSY;
 			}else{
+				//fprintf(stdout, "~~~5 XrayTechnician [%d] has xrayWaitingCount [%d] in xray room [%d].\n", index, xrayWaitCount[index], index);
 				xrayState[index] = X_FREE;
 			}
 			//////////////////////////////////////////
@@ -758,9 +770,11 @@ void XrayTechnician(int index)
 			//////////////////////////////////
 			// Leave the Xray waiting section.
 			// End of section 1 in XrayTechnician().
+			//fprintf(stdout, "~~~6 XrayTechnician [%d] has xrayWaitingCount [%d] in xray room [%d].\n", index, xrayWaitCount[index], index);
 			xrayWaitingLock[index]->Release();
-			
+			//fprintf(stdout, "~~~6.5 XrayTechnician [%d] has xrayWaitingCount [%d] in xray room [%d].\n", index, xrayWaitCount[index], index);
 			xrayInteractCV[index]->Wait(xrayInteractLock[index]);
+			//fprintf(stdout, "~~~7 XrayTechnician [%d] has xrayWaitingCount [%d] in xray room [%d].\n", index, xrayWaitCount[index], index);
 			for(int i = 0; i < xrayExamSheet[index]->numberOfXray; ++i){
 				if(0 == i)	fprintf(stdout, "Xray technician [%d] asks Adult Patient [%d] to get on the table.\n", index, xrayPatientID[index]);
 				else fprintf(stdout, "Xray Technician [%d] asks Adult Patient [%d] to move.\n", index, xrayPatientID[index]);
@@ -775,17 +789,20 @@ void XrayTechnician(int index)
 				fprintf(stdout, "Xray Technician [%d] records [nothing/break/compound fracture] on Adult Patient [%d]'s examination sheet.\n", index, xrayPatientID[index]);
 				xrayInteractCV[index]->Signal(xrayInteractLock[index]);
 				xrayInteractCV[index]->Wait(xrayInteractLock[index]);
+				//fprintf(stdout, "~~~8 XrayTechnician [%d] has xrayWaitingCount [%d] in xray room [%d]\n.", index, xrayWaitCount[index], index);
+
 			}
 			fprintf(stdout, "X-ray Technician [%d] calls Nurse [%d].\n", index);
 			xrayInteractCV[index]->Signal(xrayInteractLock[index]);
 			xrayInteractCV[index]->Wait(xrayInteractLock[index]);
 			fprintf(stdout, "X-ray Technician [%d] hands over examination sheet of Adult/Child Patient [%d] to Nurse [%d].\n", index, xrayPatientID[index]);
-			
+			//fprintf(stdout, "~~~9 XrayTechnician [%d] has xrayWaitingCount [%d] in xray room [%d]\n.", index, xrayWaitCount[index], index);
 			///////////////////////////////////////////////////////////////////////
 			// Leave the Xray Technician interact section in XrayTechnician[index].
 			// End of section 2 in XrayTechnician().
 			xrayInteractLock[index]->Release();
 		}else{
+			//fprintf(stdout, "~~~10 XrayTechnician [%d] has xrayWaitingCount [%d] in xray room [%d].\n", index, xrayWaitCount[index], index);
 			xrayState[index] = X_FREE;
 		}
 		int r = 100;
@@ -920,13 +937,16 @@ void Patient(int index) {
 		
 		xrayWaitingLock[xrayRoom_id]->Acquire();		
 		if (xrayState[xrayRoom_id] == X_BUSY || xrayState[xrayRoom_id] == X_FINISH) {		// the Xray Technician is BUSY or FINISH. then the Patient gets in line.
-			++xrayWaitingCount[xrayRoom_id];
+			//fprintf(stdout, "~~~1 Patient [%d] has xrayWaitingCount [%d] in xray room [%d]\n.", patient_ID, xrayWaitCount[xrayRoom_id], xrayRoom_id);
+			++xrayWaitCount[xrayRoom_id];
+			xrayWaitList[xrayRoom_id]->Append((void*)patient_ID);
+			//fprintf(stdout, "~~~2 Patient [%d] has xrayWaitingCount [%d] in xray room [%d]\n.", patient_ID, xrayWaitCount[xrayRoom_id], xrayRoom_id);
 			xrayWaitingCV[xrayRoom_id]->Wait(xrayWaitingLock[xrayRoom_id]);
 		}else {
 			xrayState[xrayRoom_id] = X_BUSY;
 		}
 		xrayWaitingLock[xrayRoom_id]->Release();		
-		
+		//fprintf(stdout, "~~~3 Patient [%d] has xrayWaitingCount [%d] in xray room [%d]\n.", patient_ID, xrayWaitCount[xrayRoom_id], xrayRoom_id);
 		// the Patient enters the Xray Room.
 		xrayInteractLock[xrayRoom_id]->Acquire();
 		fprintf(stdout, "Nurse [%d] informs X-Ray Technician [%d] about Adult/Child Patient [%d] and hands over the examination sheet.\n", examRoomNurse_id, xrayRoom_id, patient_ID);
@@ -935,25 +955,34 @@ void Patient(int index) {
 		xrayPatientID[xrayRoom_id] = patient_ID;
 		xrayInteractCV[xrayRoom_id]->Signal(xrayInteractLock[xrayRoom_id]);// the Patient gives the Exam Sheet to the Xray Technician.
 		
+		//fprintf(stdout, "~~~4 Patient [%d] has xrayWaitingCount [%d] in xray room [%d]\n.", patient_ID, xrayWaitCount[xrayRoom_id], xrayRoom_id);
 		// Start to take xrays.
 		int i = 0;
 		while (i < myExamSheet->numberOfXray) {
+			//fprintf(stdout, "~~~5 Patient [%d] has xrayWaitingCount [%d] in xray room [%d]\n.", patient_ID, xrayWaitCount[xrayRoom_id], xrayRoom_id);
+
 			xrayInteractCV[xrayRoom_id]->Wait(xrayInteractLock[xrayRoom_id]);
 			if (i == 0) {
 				fprintf(stdout, "Adult Patient [%d] gets on the table.\n", patient_ID);
 			}
+			//fprintf(stdout, "~~~6 Patient [%d] has xrayWaitingCount [%d] in xray room [%d]\n.", patient_ID, xrayWaitCount[xrayRoom_id], xrayRoom_id);
+
 			xrayInteractCV[xrayRoom_id]->Signal(xrayInteractLock[xrayRoom_id]);
 			xrayInteractCV[xrayRoom_id]->Wait(xrayInteractLock[xrayRoom_id]);
 			fprintf(stdout, "Adult Patient [%d] has been asked to take an Xray.\n", patient_ID);
 			xrayInteractCV[xrayRoom_id]->Signal(xrayInteractLock[xrayRoom_id]);
 			i++;
 		}		// Xray Technician finishes taking xrays for the Patient.
-		
+		//fprintf(stdout, "~~~7 Patient [%d] has xrayWaitingCount [%d] in xray room [%d]\n.", patient_ID, xrayWaitCount[xrayRoom_id], xrayRoom_id);
+
 		xrayInteractCV[xrayRoom_id]->Wait(xrayInteractLock[xrayRoom_id]);
 		fprintf(stdout, "Adult Patient [%d] waits for a Nurse to escort him/her to exam room.\n", patient_ID);
+//		fprintf(stdout, "~~~8 Patient [%d] has xrayWaitingCount [%d] in xray room [%d]\n.", patient_ID, xrayWaitCount[xrayRoom_id], xrayRoom_id);
+
 		xrayCheckingLock->Acquire();
 		xrayState[xrayRoom_id] = X_FINISH;
 		xrayCheckingLock->Release();
+		//fprintf(stdout, "~~~9 Patient [%d] has xrayWaitingCount [%d] in xray room [%d]\n.", patient_ID, xrayWaitCount[xrayRoom_id], xrayRoom_id);
 		xrayInteractCV[xrayRoom_id]->Wait(xrayInteractLock[xrayRoom_id]);	// the Patient is waiting for a Nurse to take him/her back to the Exam Room.
 
 		//	a second Nurse comes to escort Patient away back to Exam Room.
