@@ -103,6 +103,7 @@ int indexOfSheet;	// Monitor Variable: the index of the sheet kept in WRN, initi
 int indexOfPatient;	// Monitor Variable: index Of Patient in the front of the waiting queue waiting for the Nurse, initial value: 0.
 int wrnNurseIndex;	// the id of the nurse who are interacting  with the patient in waitingRoom.	
 int wrnPatientID;
+int wrnPatientAge;
 int patientID[MAX_NURSE];
 int patientWaitingCount;	// counting how many Patients are waiting in line.
 int patientWaitNurseCount; // the number of Patients waiting for the Nurse.
@@ -184,6 +185,7 @@ ExamRoom_Task examRoomTask[MAX_EXAM];
 
 // the current remaining Patient number.
 int remainPatientCount;
+int remainNurseCount;
 
 //----------------------------------------------------------------------
 // Init
@@ -198,6 +200,7 @@ void Init()
 	// Initialize the Waiting Room Nurse().
 	wrnNurseIndex = 0;
 	wrnPatientID = 0;
+	wrnPatientAge = 0;
 	indexOfSheet = 0;
 	indexOfPatient = 0;
 	numOfPatientsPassed = 0;
@@ -324,7 +327,7 @@ void Doctor(int index)
 		//examRoomCheckingLock->Acquire();
 		examRoomLock->Acquire();
 		int roomIndex = -1;
-		for(int i = 0; i < numberOfNurses; ++i){
+		for(int i = 0; i < numberOfExamRooms; ++i){
 			if(E_READY == examRoomState[i]){
 				examRoomState[i] = E_BUSY;
 				roomIndex = i; break;
@@ -338,14 +341,12 @@ void Doctor(int index)
 			examRoomLockArray[roomIndex]->Acquire();
 			// Wake up the waiting Patient and Nurse.
 			examRoomDoctorID[roomIndex] = index;	// set the Doctor ID for the current Examination Room.
-			fprintf(stdout, "Doctor [%d] is leaving their office.\n", index);	// go to the Exam Room from Office.
 			examRoomCVArray[roomIndex]->Broadcast(examRoomLockArray[roomIndex]);
 			examRoomCVArray[roomIndex]->Wait(examRoomLockArray[roomIndex]);	// wait to be waked up by the Patient.
 	
 			if(E_FIRST == examRoomTask[roomIndex]){
 				fprintf(stdout, "Doctor [%d] is reading the examination sheet of [Adult/Child] Patient [%d] in Examination room [%d].\n", index, examRoomPatientID[roomIndex], roomIndex);
 				int result = rand() % 4;
-				//result = 0;
 				if(0 == result){	// need an Xray.
 					int images = rand() % 3;
 					fprintf(stdout, "Doctor [%d] notes down in the sheet that Xray is needed for [Adult/Child] Patient [%d] in Examination room [%d].\n", index, examRoomPatientID[roomIndex], roomIndex);
@@ -371,9 +372,8 @@ void Doctor(int index)
 		}
 		// Avoid busy waiting.
 		int r = 100;
-		for(int i = 0; i < r; ++i){
+		for(int i = 0; i < r; ++i)
 			currentThread->Yield();
-		}
 	}
 }
 
@@ -402,51 +402,51 @@ void Nurse(int index)
 		}
 		else
 		{		    
-			examRoomState[i] = E_BUSY;
+			examRoomState[i] = E_BUSY; //set the state of the examRoom to be BUSY
 			examRoomLock->Release();
 			nurseWrnLock->Acquire();
-			nurseTakeSheetID->Append((void *)&index);
+			nurseTakeSheetID->Append((void *)&index);  //append the id of the nurse to the queue which is for nurse to wait the waitingRoomNurse
 			nurseWaitWrnCount++;
 			nurseWrnCV->Wait(nurseWrnLock);
 			nurseWaitWrnCount--;
-			if(nextActionForNurse == 1)
+			if(nextActionForNurse == 1)    //when the nurse is informed by the WRN to go to take a patient in the waiting room
 			{
 				
 				patientExamSheet = wrnExamSheet;				
 				nurseWrnLock->Release();
 				patientWaitNurseLock->Acquire();   //Nurse acquires the lock to escort patient
 				nurseWaitPatientCount++;
-				if(isNurseInteract == N_BUSY)  
+				if(isNurseInteract == N_BUSY)     
 				{
 					nurseWaitPatientCV->Wait(patientWaitNurseLock); //Last nurse is still interacting with a patient in the lock, so this Nurse waits here.
 				}
-				isNurseInteract = N_BUSY;
-				nurseWaitPatientCount--;
-				patientWaitNurseCount--;
+				isNurseInteract = N_BUSY;  
+				nurseWaitPatientCount--;  //minuse the number of nurses who are waiting for the patient
+				patientWaitNurseCount--;  //minuse the number of patients who are waiting for the nurse to escort to the examRoom 
 				wrnNurseIndex = index; 	// the Nurse would escort the Patient.
 				patientWaitNurseCV->Signal(patientWaitNurseLock);
 			
-				nurseLock[index]->Acquire();
+				nurseLock[index]->Acquire();  
 				patientWaitNurseLock->Release();
-				nurseWrnSemaphore->V();
+				nurseWrnSemaphore->V();  //signal the wrn to do next loop
 				nurseCV[index]->Wait(nurseLock[index]);
 				fprintf(stdout, "Nurse [%d] escorts Adult Patient /Parent [%d] to the examination room.\n", index, patientID[index]);
 			
 				int patient_ID = patientID[index];				
 				nurseExamSheet[index]->examRoomID = i;	// assign the Exam Room number.
 				nurseCV[index]->Signal(nurseLock[index]);
-				examRoomLockArray[i]->Acquire();
+				examRoomLockArray[i]->Acquire(); //acquire the lock of the examRoom
 				nurseLock[index]->Release();
-				examRoomCVArray[i]->Wait(examRoomLockArray[i]);
+				examRoomCVArray[i]->Wait(examRoomLockArray[i]);  //wait the patient to be prepared to be taken test
 			    fprintf(stdout, "Nurse [%d] takes the temperature and blood pressure of Adult Patient /Parent [%d].\n", index, patientID[index]);
 				fprintf(stdout, "Nurse [%d] asks Adult Patient /Parent [%d] What Symptoms do you have?\n", index, patientID[index]);
-                examRoomCVArray[i]->Signal(examRoomLockArray[i]);
-				examRoomCVArray[i]->Wait(examRoomLockArray[i]);
+                examRoomCVArray[i]->Signal(examRoomLockArray[i]); 
+				examRoomCVArray[i]->Wait(examRoomLockArray[i]); 
 				fprintf(stdout, "Nurse [%d] writes all the information of Adult Patient /Parent [%d] in his examination sheet.\n", index, patientID[index]);
-
-				fprintf(stdout, "Nurse [%d] informs Doctor [%d] that Adult/Child Patient [%d] is waiting in the examination room [%d].\n", index,examRoomDoctorID[i],patient_ID,i);
-				examRoomCVArray[i]->Signal(examRoomLockArray[i]);
+                examRoomCVArray[i]->Signal(examRoomLockArray[i]);
 			    examRoomCVArray[i]->Wait(examRoomLockArray[i]);	
+				fprintf(stdout, "Nurse [%d] informs Doctor [%d] that Adult/Child Patient [%d] is waiting in the examination room [%d].\n", index,examRoomDoctorID[i],patient_ID,i);
+				fprintf(stdout, "Doctor [%d] is leaving their office.\n", examRoomDoctorID[i]);	// go to the Exam Room from Office.
 				fprintf(stdout, "Nurse [%d] hands over to the Doctor [%d] the examination sheet of Adult/Child Patient [%d].\n", index,examRoomDoctorID[i],patient_ID);
 				examRoomLockArray[i]->Release();			
 			}
@@ -472,7 +472,7 @@ void Nurse(int index)
 		int loopRoomID = 0;	// the id for examRoomID.
 		for(; loopRoomID < numberOfExamRooms; ++loopRoomID)
 		{
-			fprintf(stdout, "Nurse [%d] checks the wall box of examination room [%d].\n", index,loopRoomID);
+			fprintf(stdout, "Nurse [%d] checks the wall box of examination room [%d]\n", index,loopRoomID);
 			if(examRoomState[loopRoomID] == E_FINISH)
 			{
 				examRoomState[loopRoomID] = E_BUSY;
@@ -506,12 +506,13 @@ void Nurse(int index)
 				{
 					xrayRoomID[loopRoomID] = xrayLoop;
 				}else{
+					srand(time(0));
 					index_xray = rand() % numberOfXrays;
 					xrayRoomID[loopRoomID] = index_xray;
 				}
+				fprintf(stdout, "Nurse [%d] escorts Adult Patient /Parent [%d] to the X-ray room [%d].\n", index, patientExamSheet->patientID,index_xray);
 				fprintf(stdout, "Nurse [%d] informs X-Ray Technician [%d] about Adult/Child Patient [%d] and hands over the examination sheet.\n", index,loopRoomID,patientExamSheet->patientID);
 				fprintf(stdout, "Nurse [%d] leaves the X-ray Room [%d].\n", index,loopRoomID);
-					
 			}
 			else if(patientExamSheet->shot && !(patientExamSheet->goToCashier))
 			{
@@ -520,12 +521,12 @@ void Nurse(int index)
 				patientExamSheet = examRoomExamSheet[loopRoomID];
 				fprintf(stdout, "Nurse [%d] goes to supply cabinet to give to take medicine for Adult Patient /Parent [%d].\n", index, patientExamSheet->patientID);
 				cabinetLock->Acquire();
-				// do sth in Cabinet.
+				// do sth in Cabinet. 
 				cabinetLock->Release();
 				fprintf(stdout, "Nurse [%d] asks Adult Patient/Parent [%d] \"Are you ready for the shot?\"\n", index, patientExamSheet->patientID);
 				examRoomCVArray[loopRoomID]->Wait(examRoomLockArray[loopRoomID]);
 				fprintf(stdout, "Nurse [%d] tells Adult Patient/Parent [%d] \"Your shot is over\".\n", index, patientExamSheet->patientID);
-				examRoomCVArray[loopRoomID]->Signal(examRoomLockArray[loopRoomID]);			
+				examRoomCVArray[loopRoomID]->Signal(examRoomLockArray[loopRoomID]);	    //change		
 			}else{
 				examRoomLock->Acquire();
 				examRoomState[loopRoomID] = E_FINISH;
@@ -575,9 +576,11 @@ void Nurse(int index)
 				patientExamSheet = xrayExamSheet[tempXrayID];
 				fprintf(stdout, "Nurse [%d] gets examination sheet for [Adult Patient/Parent] [%d] in Xray waiting room.\n", index,patientExamSheet->patientID);
 				examRoomLockArray[loopID]->Acquire();
+				fprintf(stdout, "Nurse [%d] escorts Adult Patient/Parent [%d] to the examination room [%d].\n", index,patientExamSheet->patientID,loopID);
 				xrayInteractLock[tempXrayID]->Release();
 				examRoomCVArray[loopID]->Wait(examRoomLockArray[loopID]);
-				fprintf(stdout, "Nurse [%d] informs Doctor [%d] that Adult/Child Patient [%d] is waiting in the examination room %d.\n", index,examRoomDoctorID[loopID],patientID[index],loopID); //有问题
+				fprintf(stdout, "Nurse [%d] informs Doctor [%d] that Adult/Child Patient [%d] is waiting in the examination room [%d].\n", index,examRoomDoctorID[loopID],patientID[index],loopID); //有问题
+				fprintf(stdout, "Doctor [%d] is leaving their office.\n", examRoomDoctorID[loopID]);	// go to the Exam Room from Office.
 				fprintf(stdout, "Nurse [%d] hands over to the Doctor [%d]  the examination sheet of Adult/Child Patient [%d].\n", index,examRoomDoctorID[loopID],patientID[index]);//有问题
 				examRoomLockArray[loopID]->Release();
 			}else{
@@ -627,6 +630,7 @@ void Nurse(int index)
 		for(loopTime = 0; loopTime != r; ++loopTime)
 			currentThread->Yield();   		
 	}
+	remainNurseCount--;
 }
 
 //----------------------------------------------------------------------
@@ -635,7 +639,7 @@ void Nurse(int index)
 //
 //----------------------------------------------------------------------
 void WaitingRoomNurse(int index) {
-	while (remainPatientCount) {
+	while (remainPatientCount || remainNurseCount) {
 		if(numOfPatientsPassed < numberOfPatients){
 			WRLock->Acquire();
 			if (patientWaitingCount > 0) {		// a Patient is in line.
@@ -656,7 +660,12 @@ void WaitingRoomNurse(int index) {
 				wrnExamSheet->xray = false;
 				wrnExamSheet->shot = false;
 				wrnExamSheet->goToCashier = false;
-				fprintf(stdout, "Waiting Room nurse gives a form to Adult patient [%d].\n", wrnPatientID);
+				int patientAge = wrnPatientAge;
+				if (patientAge > 14) {
+					fprintf(stdout, "Waiting Room nurse gives a form to Adult patient [%d].\n", wrnPatientID);
+				}else {
+					fprintf(stdout, "Waiting Room nurse gives a form to the Parent of Child patient [%d].\n", wrnPatientID);
+				}
 				WRInteractCV->Signal(WRInteractLock);		// tell the Patient that she makes a new sheet.
 				WRInteractCV->Wait(WRInteractLock);		// wait for Patient to tell her they get the sheet.
 			}		// done with a Patient's getting form task.
@@ -743,16 +752,15 @@ void Cashier(int index)
 			// End of section 1 in Cashier().
 			cashierWaitingLock->Release();
 			
-			//if(remainPatientCount)	// there would be one Patient to wake up the Cashier.
 			cashierInteractCV->Wait(cashierInteractLock);
-			//else break;	// all of the Patient has left the Doctor's office.
+			cashierExamSheet->price = rand() % 1000 + 50;	// random the price.
 			if(cashierExamSheet->age < 15){	// for Child Patient.
 				fprintf(stdout, "Cashier receives the examination sheet for Child Patient [%d] from Parent [%d].\n", cashierPatientID, cashierPatientID);
-				fprintf(stdout, "Cashier reads the examination sheet of Child Patient [%d] and asks Parent [%d] to pay $402.\n", cashierPatientID, cashierPatientID);
+				fprintf(stdout, "Cashier reads the examination sheet of Child Patient [%d] and asks Parent [%d] to pay $%d.\n", cashierPatientID, cashierPatientID, cashierExamSheet->price);
 				cashierInteractCV->Signal(cashierInteractLock);
 				cashierInteractCV->Wait(cashierInteractLock);
-				fprintf(stdout, "Cashier accepts $402 from Parent [%d].\n",  cashierPatientID);
-				fprintf(stdout, "Cashier gives a receipt of $402 to Parent [%d].\n", cashierPatientID);
+				fprintf(stdout, "Cashier accepts $%d from Parent [%d].\n",  cashierExamSheet->price, cashierPatientID);
+				fprintf(stdout, "Cashier gives a receipt of $%d to Parent [%d].\n", cashierExamSheet->price, cashierPatientID);
 				cashierInteractCV->Signal(cashierInteractLock);
 				cashierInteractCV->Wait(cashierInteractLock);
 				fprintf(stdout, "Cashier waits for the Patient to leave.\n");
@@ -760,11 +768,11 @@ void Cashier(int index)
 				cashierInteractCV->Wait(cashierInteractLock);		
 			}else{	// for Adult Patient.
 				fprintf(stdout, "Cashier receives the examination sheet from Adult Patient [%d].\n", cashierPatientID);
-				fprintf(stdout, "Cashier reads the examination sheet of Adult Patient [%d] and asks him to pay $402.\n", cashierPatientID);
+				fprintf(stdout, "Cashier reads the examination sheet of Adult Patient [%d] and asks him to pay $%d.\n", cashierPatientID, cashierExamSheet->price);
 				cashierInteractCV->Signal(cashierInteractLock);
 				cashierInteractCV->Wait(cashierInteractLock);
-				fprintf(stdout, "Cashier accepts $402 from Adult Patient [%d].\n",  cashierPatientID);
-				fprintf(stdout, "Cashier gives a receipt of $402 to Adult Patient [%d].\n", cashierPatientID);
+				fprintf(stdout, "Cashier accepts $%d from Adult Patient [%d].\n",  cashierExamSheet->price, cashierPatientID);
+				fprintf(stdout, "Cashier gives a receipt of $%d to Adult Patient [%d].\n", cashierExamSheet->price, cashierPatientID);
 				cashierInteractCV->Signal(cashierInteractLock);
 				cashierInteractCV->Wait(cashierInteractLock);
 				fprintf(stdout, "Cashier waits for the Patient to leave.\n");
@@ -860,7 +868,8 @@ void XrayTechnician(int index)
 			// End of section 2 in XrayTechnician().
 			xrayInteractLock[index]->Release();
 		}else{
-			xrayState[index] = X_FREE;
+			// No patients are in line.
+			//xrayState[index] = X_FREE;
 		}
 		
 		// Avoid busy waiting.
@@ -881,6 +890,7 @@ void Patient(int index) {
 	char patient_id[10];
 	char patient_name[20];
 	int patient_ID = index;
+	int patient_age = rand() % 50 + 15;
 	
 	fprintf(stdout, "Adult Patient [%d] has entered the Doctor's Office Waiting Room.\n", patient_ID);
 	// the Patient gets in the line for the first time to get a form.
@@ -898,6 +908,7 @@ void Patient(int index) {
 	//need to tell the Waiting Room Nurse what to do -- firstly get a form.
 	WRNurseTask = W_GETFORM;
 	wrnPatientID = patient_ID;
+	wrnPatientAge = patient_age;
 	WRInteractCV->Signal(WRInteractLock);		// tell the Waiting Room Nurse that he comes.
 	WRInteractCV->Wait(WRInteractLock);		// wait for the Waiting Room Nurse to make a new sheet.
 	fprintf(stdout, "[Adult patient] gets the form from the Waiting Room Nurse.\n");
@@ -907,7 +918,7 @@ void Patient(int index) {
 	
 	// Patient goes away and fills the form.
 	myExamSheet->patientID = patient_ID;		// write the Patient id, his name, on the sheet.
-	myExamSheet->age = rand() % 50 + 15;		// write the age of the Patient on the Exam Sheet. Adult Patient age should be larger than 15.
+	myExamSheet->age = patient_age;		// write the age of the Patient on the Exam Sheet. Adult Patient age should be larger than 15.
 	sprintf(patient_id, "%d ", patient_ID);
 	strcpy(patient_name, "Patient_");
 	strcat(patient_name, patient_id);
@@ -976,7 +987,7 @@ void Patient(int index) {
 		myExamSheet->symptom = "nausea";
 	else
 		myExamSheet->symptom = "hear alien voices";
-	fprintf(stdout, "Adult Patient [%d] says, \"My/His symptoms are [%s]\".\n", patient_ID, myExamSheet->symptom);
+	fprintf(stdout, "Adult Patient [%d] says, \"My symptoms are [%s]\".\n", patient_ID, myExamSheet->symptom);
 	examRoomExamSheet[examRoom_id] = myExamSheet;
 	examRoomCVArray[examRoom_id]->Signal(examRoomLockArray[examRoom_id]);		// get into a Exam Room and wait for a Doctor, together with a Nurse.
 	examRoomCVArray[examRoom_id]->Wait(examRoomLockArray[examRoom_id]);		// get into a Exam Room and wait for a Doctor, together with a Nurse.
@@ -1018,8 +1029,6 @@ void Patient(int index) {
 		xrayWaitingLock[xrayRoom_id]->Release();		
 		// the Patient enters the Xray Room.
 		xrayInteractLock[xrayRoom_id]->Acquire();
-		fprintf(stdout, "Nurse [%d] informs X-Ray Technician [%d] about Adult Patient [%d] and hands over the examination sheet.\n", examRoomNurse_id, xrayRoom_id, patient_ID);
-		fprintf(stdout, "Nurse [%d] leaves the X-ray Room [%d].\n", examRoomNurse_id, xrayRoom_id);
 		xrayExamSheet[xrayRoom_id] = myExamSheet;
 		xrayPatientID[xrayRoom_id] = patient_ID;
 		xrayInteractCV[xrayRoom_id]->Signal(xrayInteractLock[xrayRoom_id]);// the Patient gives the Exam Sheet to the Xray Technician.
@@ -1031,9 +1040,9 @@ void Patient(int index) {
 			if (i == 0) {
 				fprintf(stdout, "Adult Patient [%d] gets on the table.\n", patient_ID);
 			}
+			fprintf(stdout, "Adult Patient [%d] has been asked to take an Xray.\n", patient_ID);
 			xrayInteractCV[xrayRoom_id]->Signal(xrayInteractLock[xrayRoom_id]);
 			xrayInteractCV[xrayRoom_id]->Wait(xrayInteractLock[xrayRoom_id]);
-			fprintf(stdout, "Adult Patient [%d] has been asked to take an Xray.\n", patient_ID);
 			xrayInteractCV[xrayRoom_id]->Signal(xrayInteractLock[xrayRoom_id]);
 			i++;
 		}		// Xray Technician finishes taking xrays for the Patient.
@@ -1128,7 +1137,7 @@ void Patient(int index) {
 	fprintf(stdout, "Adult Patient [%d] hands over his examination sheet to the Cashier.\n", patient_ID);
 	cashierInteractCV->Signal(cashierInteractLock);			
 	cashierInteractCV->Wait(cashierInteractLock);	
-	fprintf(stdout, "Adult Patient [%d] pays the Cashier $402.\n", patient_ID);
+	fprintf(stdout, "Adult Patient [%d] pays the Cashier $%d.\n", patient_ID, cashierExamSheet->price);
 	cashierInteractCV->Signal(cashierInteractLock);			
 	cashierInteractCV->Wait(cashierInteractLock);
 	fprintf(stdout, "Adult Patient [%d] receives a receipt from the Cashier.\n", patient_ID);
@@ -1139,7 +1148,8 @@ void Patient(int index) {
 	fprintf(stdout, "Adult Patient [%d] leaves the doctor's office.\n", patient_ID);
 	cashierInteractCV->Signal(cashierInteractLock);			
 	cashierInteractLock->Release();
-	if(0 == --remainPatientCount) abort();	// exit the Problem2().
+	--remainPatientCount;
+	//if(0 == --remainPatientCount) abort();	// exit the Problem2().
 }
 
 //----------------------------------------------------------------------
@@ -1153,6 +1163,7 @@ void Parent(int index) {
 	char patient_id[10];
 	char patient_name[20];
 	int patient_ID = index;
+	int patient_age = rand() % 14 + 1;
 	
 	parentChildSemaphore[patient_ID]->P();
 	// the Patient gets in the line for the first time to get a form.
@@ -1170,6 +1181,7 @@ void Parent(int index) {
 	//need to tell the Waiting Room Nurse what to do -- firstly get a form.
 	WRNurseTask = W_GETFORM;
 	wrnPatientID = patient_ID;
+	wrnPatientAge = patient_age;
 	WRInteractCV->Signal(WRInteractLock);		// tell the Waiting Room Nurse that he comes.
 	WRInteractCV->Wait(WRInteractLock);		// wait for the Waiting Room Nurse to make a new sheet.
 	fprintf(stdout, "[Parent of child patient] gets the form from the Waiting Room Nurse.\n");
@@ -1179,7 +1191,7 @@ void Parent(int index) {
 	
 	// Patient goes away and fills the form.
 	myExamSheet->patientID = patient_ID;		// write the Patient id, his name, on the sheet.
-	myExamSheet->age = rand() % 14 + 1;		// write the age of the Patient on the Exam Sheet. Adult Patient age should be larger than 15.
+	myExamSheet->age = patient_age;		// write the age of the Patient on the Exam Sheet. Adult Patient age should be larger than 15.
 	sprintf(patient_id, "%d ", patient_ID);
 	strcpy(patient_name, "Patient_");
 	strcat(patient_name, patient_id);
@@ -1213,7 +1225,7 @@ void Parent(int index) {
 	////////////////////////////////////////////
 	// Parent and Child interaction
 	
-	fprintf(stdout, "Parent [%d] asks Child Patient [%d] to follow them.\n", patient_ID);
+	fprintf(stdout, "Parent [%d] asks Child Patient [%d] to follow them.\n", patient_ID, patient_ID);
 	
 	//
 	////////////////////////////////////////////
@@ -1255,7 +1267,7 @@ void Parent(int index) {
 		myExamSheet->symptom = "nausea";
 	else
 		myExamSheet->symptom = "hear alien voices";
-	fprintf(stdout, "Parent [%d] says, \"My/His symptoms are [%s]\".\n", patient_ID, myExamSheet->symptom);
+	fprintf(stdout, "Parent [%d] says, \"His symptoms are [%s]\".\n", patient_ID, myExamSheet->symptom);
 	examRoomExamSheet[examRoom_id] = myExamSheet;
 	examRoomCVArray[examRoom_id]->Signal(examRoomLockArray[examRoom_id]);		// get into a Exam Room and wait for a Doctor, together with a Nurse.
 	examRoomCVArray[examRoom_id]->Wait(examRoomLockArray[examRoom_id]);		// get into a Exam Room and wait for a Doctor, together with a Nurse.
@@ -1288,6 +1300,13 @@ void Parent(int index) {
 		examRoomState[examRoom_id] = E_FINISH;
 		examRoomLock->Release();
 		fprintf(stdout, "Parent [%d] waits for a Nurse to escort them to the Xray room.\n", patient_ID);
+		////////////////////////////////////////////
+		// Parent and Child interaction
+		
+		fprintf(stdout, "Parent [%d] asks Child Patient [%d] to follow them.\n", patient_ID, patient_ID);
+		
+		//
+		////////////////////////////////////////////
 		examRoomCVArray[examRoom_id]->Wait(examRoomLockArray[examRoom_id]);	// the Patient waits for a Nurse to escort him/her to Xay Room.
 		
 		// a Nurse comes to escort Patient away.
@@ -1308,8 +1327,6 @@ void Parent(int index) {
 		xrayWaitingLock[xrayRoom_id]->Release();		
 		// the Patient enters the Xray Room.
 		xrayInteractLock[xrayRoom_id]->Acquire();
-		fprintf(stdout, "Nurse [%d] informs X-Ray Technician [%d] about Child Patient [%d] and hands over the examination sheet.\n", examRoomNurse_id, xrayRoom_id, patient_ID);
-		fprintf(stdout, "Nurse [%d] leaves the X-ray Room [%d].\n", examRoomNurse_id, xrayRoom_id);
 		xrayExamSheet[xrayRoom_id] = myExamSheet;
 		xrayPatientID[xrayRoom_id] = patient_ID;
 		xrayInteractCV[xrayRoom_id]->Signal(xrayInteractLock[xrayRoom_id]);// the Patient gives the Exam Sheet to the Xray Technician.
@@ -1330,20 +1347,31 @@ void Parent(int index) {
 				
 				//
 				////////////////////////////////////////////
+			}else {
+				////////////////////////////////////////////
+				// Parent and Child interaction
+				
+				parentChildLock[patient_ID]->Acquire();
+				parentChildState[patient_ID] = P_MOVE;
+				parentChildCV[patient_ID]->Signal(parentChildLock[patient_ID]);
+				parentChildCV[patient_ID]->Wait(parentChildLock[patient_ID]);
+				parentChildLock[patient_ID]->Release();
+				
+				//
+				////////////////////////////////////////////
 			}
-			xrayInteractCV[xrayRoom_id]->Signal(xrayInteractLock[xrayRoom_id]);
-			xrayInteractCV[xrayRoom_id]->Wait(xrayInteractLock[xrayRoom_id]);
 			////////////////////////////////////////////
 			// Parent and Child interaction
 			
 			parentChildLock[patient_ID]->Acquire();
-			parentChildState[patient_ID] = P_MOVE;
+			parentChildState[patient_ID] = P_XRAY;
 			parentChildCV[patient_ID]->Signal(parentChildLock[patient_ID]);
 			parentChildCV[patient_ID]->Wait(parentChildLock[patient_ID]);
 			parentChildLock[patient_ID]->Release();
 			
-			//
 			////////////////////////////////////////////
+			xrayInteractCV[xrayRoom_id]->Signal(xrayInteractLock[xrayRoom_id]);
+			xrayInteractCV[xrayRoom_id]->Wait(xrayInteractLock[xrayRoom_id]);
 			xrayInteractCV[xrayRoom_id]->Signal(xrayInteractLock[xrayRoom_id]);
 			i++;
 		}		// Xray Technician finishes taking xrays for the Patient.
@@ -1377,7 +1405,6 @@ void Parent(int index) {
 		parentChildCV[patient_ID]->Wait(parentChildLock[patient_ID]);
 		parentChildLock[patient_ID]->Release();
 		
-		//
 		////////////////////////////////////////////
 		examRoomCVArray[examRoomSecondTime_id]->Signal(examRoomLockArray[examRoomSecondTime_id]);	
 		examRoomCVArray[examRoomSecondTime_id]->Wait(examRoomLockArray[examRoomSecondTime_id]);	
@@ -1438,7 +1465,6 @@ void Parent(int index) {
 		parentChildCV[patient_ID]->Wait(parentChildLock[patient_ID]);
 		parentChildLock[patient_ID]->Release();
 		
-		//
 		////////////////////////////////////////////
 		examRoomLock->Acquire();
 		examRoomState[examRoom_id] = E_FINISH;
@@ -1468,18 +1494,18 @@ void Parent(int index) {
 	cashierInteractLock->Acquire();
 	cashierExamSheet = myExamSheet;
 	fprintf(stdout, "Parent [%d] reaches the Cashier.\n", patient_ID);
-	fprintf(stdout, "Parent [%d] hands over his examination sheet to the Cashier.\n", patient_ID);
+	fprintf(stdout, "Parent [%d] hands over Child Patient [%d]'s examination sheet to the Cashier.\n", patient_ID, patient_ID);
 	cashierInteractCV->Signal(cashierInteractLock);			
 	cashierInteractCV->Wait(cashierInteractLock);	
-	fprintf(stdout, "Parent [%d] pays the Cashier $402.\n", patient_ID);
+	fprintf(stdout, "Parent [%d] pays the Cashier $%d.\n", patient_ID, cashierExamSheet->price);
 	cashierInteractCV->Signal(cashierInteractLock);			
 	cashierInteractCV->Wait(cashierInteractLock);
-	fprintf(stdout, "Parent [%d] receives a receipt from the Cashier.\n", patient_ID);
+	fprintf(stdout, "Parent [%d] receives a receipt for Child Patient [%d] from the Cashier.\n", patient_ID, patient_ID);
 	cashierInteractCV->Signal(cashierInteractLock);			
 	cashierInteractCV->Wait(cashierInteractLock);
 	
 	// Patient finishes everything and leaves.
-	fprintf(stdout, "Parent [%d] leaves the doctor's office.\n", patient_ID);
+	fprintf(stdout, "Parent [%d] leaves the doctor's office with Child Patient [%d].\n", patient_ID, patient_ID);
 	cashierInteractCV->Signal(cashierInteractLock);			
 	cashierInteractLock->Release();
 	////////////////////////////////////////////
@@ -1492,7 +1518,8 @@ void Parent(int index) {
 	
 	//parent leaves the doctor's office with the child
 	////////////////////////////////////////////
-	if(0 == --remainPatientCount) abort();	// exit the Problem2().
+	--remainPatientCount;
+	//if(0 == --remainPatientCount) abort();	// exit the Problem2().
 }
 
 //----------------------------------------------------------------------
@@ -1502,7 +1529,7 @@ void Parent(int index) {
 //	Child Patients are never abandoned by their Parent, nor go anywhere 
 //	without their Parent.
 //----------------------------------------------------------------------
-void Child (int index) {
+void Child(int index) {
 	int doctor_id;
 	int patient_ID = index;
 	
@@ -1693,6 +1720,7 @@ void Problem2(void)
 		// Initialize the numbers of all entities.
 		numberOfWRNs = numberOfCashiers = 1;
 		numberOfParents = numberOfChildren;
+		remainNurseCount = numberOfNurses;
 		numberOfPatients = remainPatientCount = numberOfAdults + numberOfChildren; 
 	}
 	
@@ -1761,13 +1789,13 @@ void Problem2(void)
 	}
 	
 	// Fork Child Patients.
-	for(int i = 0; i < numberOfChildren; ++i){
+	for(int i = numberOfAdults; i < numberOfChildren + numberOfAdults; ++i){
 		Thread* t = new Thread("Child");
 		t->Fork(Child, i);
 	}
 	
 	// Fork Parents.
-	for(int i = 0; i < numberOfParents; ++i){
+	for(int i = numberOfAdults; i < numberOfParents + numberOfAdults; ++i){
 		Thread* t = new Thread("Parent");
 		t->Fork(Parent, i);
 	}
