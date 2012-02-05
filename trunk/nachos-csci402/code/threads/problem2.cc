@@ -17,6 +17,7 @@
 #define MAX_XRAY 2
 #define MAX_EXAM 5
 #define XRAY_IMAGE 3
+#define MAX_MEM 1000
 
 //----------------------------------------------------------------------
 // Global data structures.
@@ -114,7 +115,7 @@ int examRoomPatientID[MAX_EXAM];
 int examRoomSecondTimeID[MAX_XRAY];	// the ID for the Examination Room in the second visit.
 int xrayRoomID[MAX_XRAY];
 int xrayPatientID[MAX_XRAY];
-int* parentTellChildDocID;	// dynamic allocation.
+int parentTellChildDocID[MAX_MEM];	// dynamic allocation.
 List* nurseTakeSheetID;
 List* xrayWaitList[MAX_XRAY];
 List* cashierWaitList;
@@ -280,7 +281,7 @@ void Init()
 
 	// Initialize the Parent() and Child().
 	parentChildState = new ParentChild_State[numberOfPatients];
-	parentTellChildDocID = new int[numberOfPatients];
+	//parentTellChildDocID = new int[numberOfPatients];
 	leave = new bool[numberOfPatients];
 	parentChildSemaphore = new Semaphore*[numberOfPatients];
 	parentChildLock = new Lock*[numberOfPatients];
@@ -570,7 +571,7 @@ void Nurse(int index)
 				examRoomCVArray[loopID]->Wait(examRoomLockArray[loopID]);
 				fprintf(stdout, "Nurse [%d] informs Doctor [%d] that Adult/Child Patient [%d] is waiting in the examination room [%d].\n", index,examRoomDoctorID[loopID],patientExamSheet->patientID,loopID);
 				fprintf(stdout, "Doctor [%d] is leaving their office.\n", examRoomDoctorID[loopID]);	// go to the Exam Room from Office.
-				fprintf(stdout, "Nurse [%d] hands over to the Doctor [%d]  the examination sheet of Adult/Child Patient [%d].\n", index,examRoomDoctorID[loopID],patientExamSheet->patientID);
+				fprintf(stdout, "Nurse [%d] hands over to the Doctor [%d] the examination sheet of Adult/Child Patient [%d].\n", index,examRoomDoctorID[loopID],patientExamSheet->patientID);
 				examRoomLockArray[loopID]->Release();
 			}else{
 				examRoomLock->Acquire();
@@ -986,7 +987,7 @@ void Patient(int index) {
 	examRoomCVArray[examRoom_id]->Wait(examRoomLockArray[examRoom_id]);		// get into a Exam Room and wait for a Doctor, together with a Nurse.
 	
 	// turn over the exam sheet to the Doctor.
-	examRoomPatientID[examRoom_id ] = index;	// modified by Litao Deng.
+	examRoomPatientID[examRoom_id ] = index;
 	examRoomCVArray[examRoom_id]->Signal(examRoomLockArray[examRoom_id]);		
 	examRoomCVArray[examRoom_id]->Wait(examRoomLockArray[examRoom_id]);		
 	myExamSheet = examRoomExamSheet[examRoom_id];		// Doctor finishes the first time Examination.
@@ -1268,7 +1269,6 @@ void Parent(int index) {
 	if (myExamSheet->xray) {		// the Patient needs to take an Xray.
 		////////////////////////////////////////////
 		// Parent and Child interaction
-		
 		parentChildLock[patient_ID]->Acquire();
 		parentChildState[patient_ID] = P_EXAMXRAY;
 		parentTellChildDocID[patient_ID] = examRoomDoctorID[examRoom_id];
@@ -1395,14 +1395,12 @@ void Parent(int index) {
 	else if (myExamSheet->shot) {	// the Patient needs a shot.
 		////////////////////////////////////////////
 		// Parent and Child interaction
-		
 		parentChildLock[patient_ID]->Acquire();
 		parentChildState[patient_ID] = P_EXAMSHOT;
 		parentTellChildDocID[patient_ID] = examRoomDoctorID[examRoom_id];
 		parentChildCV[patient_ID]->Signal(parentChildLock[patient_ID]);
 		parentChildCV[patient_ID]->Wait(parentChildLock[patient_ID]);
 		parentChildLock[patient_ID]->Release();
-		
 		////////////////////////////////////////////
 		examRoomLock->Acquire();
 		examRoomState[examRoom_id] = E_FINISH;
@@ -1428,14 +1426,12 @@ void Parent(int index) {
 	else {	// the Patient has no problem and can go to the Cashier directly.
 		////////////////////////////////////////////
 		// Parent and Child interaction
-		
 		parentChildLock[patient_ID]->Acquire();
 		parentChildState[patient_ID] = P_EXAMDIAGNOSED;
 		parentTellChildDocID[patient_ID] = examRoomDoctorID[examRoom_id];
 		parentChildCV[patient_ID]->Signal(parentChildLock[patient_ID]);
 		parentChildCV[patient_ID]->Wait(parentChildLock[patient_ID]);
 		parentChildLock[patient_ID]->Release();
-		
 		////////////////////////////////////////////
 		examRoomLock->Acquire();
 		examRoomState[examRoom_id] = E_FINISH;
@@ -1719,12 +1715,12 @@ void Problem2(void)
 			fprintf(stderr, "The interval of the number of the Xray Technicians is [1, 2].\n");
 			return;
 		}
-		if(numberOfPatients < 0){
-			fprintf(stderr, "The interval of the number of the Patients is [0, MAX_INTEGER).\n");
+		if(numberOfAdults < 0 || numberOfAdults > 150){
+			fprintf(stderr, "The interval of the number of the Patients is [0, 150].\n");
 			return;
 		}
-		if(numberOfChildren < 30){
-			fprintf(stderr, "The interval of the number of the Parents/Child Patients is [30, MAX_INTEGER).\n");
+		if(numberOfChildren < 30 || numberOfChildren > 150){
+			fprintf(stderr, "The interval of the number of the Parents/Child Patients is [30, 150].\n");
 			return;
 		}
 		if(numberOfExamRooms < 2 || numberOfExamRooms > 5){
