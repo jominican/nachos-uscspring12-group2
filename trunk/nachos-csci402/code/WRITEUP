@@ -1,0 +1,398 @@
+Writeup for Project 1, Spring 2012
+
+Date: 02/04/2012
+
+Group 2:	    Name			Email				StudentID
+		    Litao Deng		litaoden@usc.edu		1862559792		    
+		    Hao Chen			haoc@usc.edu			4029003250
+		    Anqi Wu			anqiwu@usc.edu			8784768365
+			
+I. Requirements:
+
+	Part 1
+		Implement locks and condition variables. Define our own private variables and implement interfaces.
+		Finally achieve the mutual exclusion and sequential control among threads sharing data and resource in the same critical section.
+
+	Part 2
+		Simulate the operation of a doctor's office by implementing threads, list, and synchronization. 
+		Each role is a thread and they have synchronous and mutual exclusive tasks, such as one doctor can only diagnose one patient at a time, and the other patients can not come in.
+		This is an example for mutual exclusive task. We need to implement the diagnoses for all the patients without leaving any patient stuck in any procedure.
+	
+II. Assumptions: 	
+
+	Part 1
+		A thread can release a lock even though it does not hold.
+		A thread can release a lock even though it does not acquire it.
+		we implement the synchronization using locks.
+		Condition variable is always used with the same lock.
+	
+	Part 2
+		Adult patient is equal to or older than 15, Child patient is younger than 15.
+		Doctor initiatively check the exam room state, but not informed by nurses.
+		Waiting room nurse asks for a nurse to escort a patient every time she finishes the interaction with a patient. 
+		Patient and nurse together wait in an exam room for a doctor to come.
+		Nurse cannot leave the exam room only if a doctor comes.
+		There's no pocket here. Doctor leaves as soon as he finishes diagnosing and patient waits till a nurse initiatively comes to escort him away.
+		Each X-ray room has a waiting queue. Nurse escorts a patient there and puts him in the queue then leaves.
+		X-ray technician can only check for the next patient only if the patient is escorted away.
+		When a doctor finally finishes the diagnose for the patient, we consider it as "the patient has been diagnosed by a doctor".
+		Patient either has to take an X-ray or a shot. They cannot both happen.
+		We verified that Nachos has a memory management problem and we tried to dynamically allocate memories for arrays but the allocated memories are sometimes deleted by Nachos.
+		We have already successfully implemented codes and achieved a synchronized, multi-threaded system by using dynamic allocation, but very occasionally, segmentation fault caused by allocation problem occurs.
+		Therefore, we perform static allocation here in our implementation (in this case, we limit the interval of the Adult Patients and Child Patients to [0, 1000], [30, 1000] respectively).
+	
+III. Design:
+
+	Part 1
+		1. Lock Acquire
+			disable interrupt
+			if it's the holder then it just quit
+			if the lock is free, the current thread just takes it
+			if the lock is busy, the current thread sleeps and waits for this lock
+			restore interrupt
+		2. Lock Release
+			disable interrupt
+			if it's not the holder then it just quit
+			if no one is waiting for the lock, let the lock be free
+			if some one is waiting for the lock, let the thread be the owner
+			restore interrupt
+		3. Judge whether the current thread is the holder of the lock
+		4. Condition Wait
+			disable interrupt
+			if the lock is null, then there's an error
+			if the condition's waiting lock is null, then let the lock be the waiting lock
+			if the lock is not consistent with the waiting lock in the condition, then there's an error and quit
+			if they are consistent, the current thread release the lock and waits for the condition variable to wake it up and to acquire the lock again
+			restore interrupt
+		5. Condition Signal
+			disable interrupt
+			if no one is waiting for the condition variable, then just quit
+			if the lock is not consistent with the waiting lock in the condition, then there's an error and quit
+			if they are consistent, then wakes up a waiting thread if there's a one and puts it into the ready queue for cpu
+			restore interrupt
+		6. Condition Broadcast
+			Circularly wakes up all the waiting threads
+
+	Part 2
+		There are 9 entities in this part, and each has its own task. In each one's task, there will be many interactions with others
+		1. Patient:
+			enters the doctor's office and enters the waiting room first
+			gets in line to interact with the waiting room nurse
+			if waiting room nurse is busy
+				wait there till she calls him/her
+			else 
+				let the waiting room nurse be busy
+			patient goes to interact with waiting room nurse
+			he asks an examination form from the waiting nurse 
+			when he gets a form, he fills in his information and gets back to the line waiting to hand over the form
+			if waiting room nurse is busy
+				wait there till she calls him/her
+			else 
+				let the waiting room nurse be busy
+			patient hands over the form and waiting room nurse will tell him to wait in another line for a nurse to escort him to the exam room
+			when a nurse comes to escort him away, he follows the nurse to an available exam room
+			nurse will ask him about his symptoms and he answers pain, nausea or hear alien voices
+			after nurse writes the symptoms down in the patient's exam form, patient waits for a doctor to come
+			when doctor diagnosing him, doctor will tell the patient wether he needs an X-ray, a shot or nothing
+			if patient needs an X-ray, he will wait for a nurse to take him to either one of the X-ray rooms
+				if X-ray technician is busy right now
+					nurse will leave the patient to the waiting line
+				else 
+					let X-ray technician be busy
+				patient enters the X-ray room and gets X-rays taken by X-ray technician
+				after taking X-rays, patient waits for a nurse to escort him back to the exam room
+				when he enters an exam room second time, doctor will read his X-ray images and tell him the results, then patient can wait for a nurse to escort him to the cashier
+			if patient needs a shot, he will wait for a nurse coming to give him a shot
+				when nurse asks him whether he's ready, patient answers yes
+				after taking a shot, patient waits there for a nurse to escort him to the cashier
+			if patient is diagnosed fine and doesn't need any treat, he will directly wait there for a nurse to escort him to the cashier
+			when patient arrives at cashier, he will see whether cashier is busy
+			if cashier is busy
+				he needs to wait in the queue
+			else
+				let the cashier be busy
+			patient reaches the cashier and hands over his examination sheet to the cashier
+			after cashier reading his sheet and telling him the price, patient pays the required amount of money, then receives a receipt from the cashier
+			finally, patient leaves the doctor's office
+
+		2. Parent
+			parent enters the doctor's office with the child and enters the waiting room first
+			gets in line to interact with the waiting room nurse
+			if waiting room nurse is busy
+				wait there till she calls him/her
+			else 
+				let the waiting room nurse be busy
+			parent goes to interact with waiting room nurse
+			he asks an examination form from the waiting nurse 
+			when he gets a form, he fills in his child's information and gets back to the line waiting to hand over the form
+			if waiting room nurse is busy
+				wait there till she calls him/her
+			else 
+				let the waiting room nurse be busy
+			parent hands over the form and waiting room nurse will tell him to wait in another line for a nurse to escort them to the exam room
+			when a nurse comes to escort them to an available exam room, parent asks his child to follow them
+			nurse will ask parent about his child's symptoms and the child answers pain, nausea or hear alien voices
+			after nurse writes the symptoms down in the patient's exam form, patient waits for a doctor to come
+			when doctor diagnosing the child, doctor will tell parent and child patient wether he needs an X-ray, a shot or nothing
+			if child patient need an X-ray, they will wait for a nurse to take them to either one of the X-ray rooms
+				if X-ray technician is busy right now
+					nurse will leave parent and his child patient to the waiting line
+				else 
+					let X-ray technician be busy
+				parent and child patient enter the X-ray room and get X-rays taken by X-ray technician
+				after taking X-rays, they waits for a nurse to escort them back to the exam room
+				when they enter an exam room second time, doctor will read child's X-ray images and tell them the results, then parent and child can wait for a nurse to escort them to the cashier
+			if child patient need a shot, they will wait for a nurse coming to give child a shot
+				when nurse asks parent whether child's ready, parent answers yes
+				after taking a shot, parent and child wait there for a nurse to escort them to the cashier
+			if child patient is diagnosed fine and doesn't need any treat, they will directly wait there for a nurse to escort them to the cashier
+			when parent and child patient arrive at cashier, parent will see whether cashier is busy
+			if cashier is busy
+				parent needs to wait in the queue
+			else
+				let the cashier be busy
+			parent reaches the cashier and hands over his child's examination sheet to the cashier
+			after cashier reading the sheet and telling him the price, parent pays the required amount of money, then receives a receipt from the cashier
+			finally, parent and his child leave the doctor's office together
+
+		3. Child Patient: 
+			child patient enters the doctor's office together with his parent
+			child always follows his parent and waits till parent, doctor or X-ray technician tells him what to do
+			if a nurse comes to escort him away, child will follow parent and nurse when parent asks him to follow them
+			if doctor tells him to take an X-ray, he will wait there with his parent for a nurse to come to escort them to the X-ray room
+			if X-ray technician tells him to get on a table, he will get on the table
+			if X-ray technician tells him to move, he will move
+			if doctor tells him to take a shot, he will wait there with his parent for a nurse to come to give a shot
+			if doctor finishes diagnosing, child will tell that "he has been diagnosed by Doctor"
+			when parent pays the treatment fee, he follows his parent to leave the doctor's office
+
+		4. Waiting Room Nurse: 
+			if there's no patient waiting in waiting room and no nurse coming to escort a patient away, waiting room nurse finishes her work
+			else
+				if there's patient waiting for interacting with waiting room nurse
+					waiting nurse wakes up the most front patient in line and calls him to come over	
+					if the patient wants an exam form
+						makes a new form for patient
+					if the patient hands over an exam form
+						records the exam form information, creates a new form with his name and age, and lets the patient to wait for a nurse in another queue
+				else if there's no patient waiting for interacting with waiting room nurse, waiting nurse skips the above step
+				checks whether there's a nurse waiting for escorting patient
+				if there's at least a nurse
+					if the number of waiting patients is larger than the number of waiting nurses
+						then wakes up the most front nurse 
+						gives her the form corresponding to the most front patient
+						waits till the nurse escorts a patient away
+					else
+						lets the nurse leave because there's no need for the nurse to wait
+				continues to interact with the next patient				
+				
+		5. Cashier:
+			The cashier waits in the cash room if there is no patient comes to check.			if there is one patient comes to check,				the cashier set his state to be BUSY				then the cashier interacts with the patient.				after the patient finishes the task of paying for the bill				the cashier again goes to check if there is patient waiting to interact with him, if there is no patient waiting the cashier, then the				cashier continues to check if there is patient coming to wait.
+		
+		6. Xray Technicians:
+			The technician first check if there is patient waiting to be taken test; 			if there is no patient waiting, then the nurse continues to check.			if there is patient waiting in the waiting queue,				then the technician signal the waiting patient, and, interact with the patient in the x-ray room.				once the x-ray technician finishes his task with the patient, then the technician set the state of the x-ray room to be FINISH				and, waits for a nurse to come to escort the patient to the examination room.			after the patient leaves the x-ray room with a nurse , then the x-ray technician continues to check if there is patient waiting for him/her.
+		
+		7. Doctors:
+			The doctor first waits in his/her office to be called by the nurse.			after one nurse comes to ask the doctor to go to an examination room to diagnose the patient, 				then the doctor follow the nurse to go to the examination room.				after going into the examination room, the doctor check whether the task for the patient is TASK_ONE or TASK_TWO			if the task is TASK_ONE				the doctor randomly decides whether the patient needs x-ray, shot or the patient is fine.			if the task is TASK_TWO				then the doctor checks the x-ray images of the patient			after the doctor finishes the TASK_ONE or TASK_TWO, then he/she posts the examination sheet to the wall box of the examination room; and the doctor leaves the examination room and goes back to his/her office, and waits to be called by the next nurse. 
+		
+		8. Nurses:
+			The nurse has four tasks.
+			Task 1: Get a patient from waiting room, then escort the patient to an examination room, and then go and ask a free doctor to come to diagnose the patient.
+			First, the nurse detects the state of the examination room.
+			if there is an FREE examination room                                          
+				the nurse makes the state of the examination room to be BUSY, and acquire the lock of the examination room.                                                           
+			else there is no FREE examination room, then the nurse terminates the task 1.
+
+			Then, the nurse goes to the waiting room to ask the waiting room nurse           
+			if there is patient waiting in the waiting room to be escorted to the examination room and the number of the nurses waiting in the waiting room to escort a patient is less than the number of the patients in the waiting room who are waiting for the nurses to be escorted                                                                                                                                                                                  			if there is one nurse still taking a patient in the waiting room,        
+     				if the nurse waits until the state is FREE.
+     				else there is no nurse interacting with a patient in the waiting room                             
+     				then the nurse goes to take a patient in the waiting room;                                                
+			else if the there are enogh nurses waiting in the waiting room to take a patient.
+			then the nurse terminates the task 1.
+
+			if the nurse has taken a patient from the waiting room to the examination room.
+			then the nurse tests the patient, and, the nurse goes to ask a doctor to come to diagnose the patient, then the nurse leaves the examinationRoom.
+
+			Task 2:
+			The nurse first checks the the state of the examination room
+			if the state is finish, then the nurse changes the state to be busy
+				the nurse goes into the examination room to check the state of the patient.
+				if the patient needs to x-ray
+					then the nurse escorts the nurse to the x-ray room.
+					if there is FREE x-ray room;
+ 						the nurse escorts the patient to that x-ray room,
+					else
+						the nurse makes the patient wait in the x-ray waiting room and then leaves.
+				if the patient need the shot
+				then the nurse goes to cabinet to get medicine, and give shot to the patient in the examination room.
+
+			Task 3:
+			The nurse first gets one FREE examination room
+			The nurse first goes to check the state of the x-ray room
+				if the state of one x-ray room is FINISH
+					then the nurse goes into the x-ray room and escorts the patient to the examination room
+				else there is no FINISH x-ray room
+					the nurse terminates the task 3
+
+			Task 4:
+			The nurse goes to check the state of the examination room
+			if the examination room is FINISH and the patient's state is goToCashier
+				the nurse takes the patient to the cashier.
+			else
+				the nurse leaves the examination room
+
+		9. Examination Sheets: 
+			Exam sheet is the core information throughout the whole process. Each patient holds his own exam sheet which records the following information:
+				patientID: identifying each patient
+				age: the age of each patient
+				name: the name of each patient
+				examRoomID: the number of the exam room which patient first goes to 
+				xray: telling whether patient needs an X-ray. if needs then true; else false
+				xrayID: the number of Xray technician taking X-rays for patient
+				numberOfXray: how many X-ray images patient needs to take
+				xrayImage: the result of X-ray for each time. It should be 'nothing', 'break' or 'compound fracture'
+				shot: telling whether patient needs a shot. if needs then true; else false
+				price: the treatment fee
+				symptom: the symptom patient has
+				result: examination result.
+				goToCashier: tell whether patient needs to pay. If diagnosing is over, then patient needs to go to the cashier
+			The Waiting Room Nurse holds onto all examination sheets for Patients in the waiting room. The X-ray technician holds the examination sheet for the Patient that is having xray images taken. Nurses that are escorting Patients, carry their examination sheet with them.
+
+IV. Implementation:
+
+	Part 1
+	
+	+ Files Modified
+		threads/synch.cc
+		threads/synch.h
+		threads/main.cc
+
+	+ Data Structures added
+		in synch.h
+			bool    value; 	// lock value, true == FREE, false == BUSY
+			Thread* hostThread; 	// the thread who currently hold the lock
+			List*   queue; 	// threads waiting in Acquire() for the value to be == FREE (true)
+			Lock* waitingLock; 	// 
+			List* queue; 	// threads waiting in Wait() for the signal operation
+			
+	+ Functions addes
+		in synch.cc
+			bool Lock::isHeldByCurrentThread()
+		
+	+ Function modified
+		in main.cc
+			#ifdef THREADS
+			extern void Problem2(void), TestSuite(void);
+			#endif
+			
+			#ifdef THREADS
+			//ThreadTest();
+			if (!strcmp(*argv, "-T"))               // Test Suite: link for this code is at the bottom of part 1 description
+				TestSuite();
+			if (!strcmp(*argv, "-P2"))               // Problem 2: for part 2
+				Problem2();
+			#endif
+	
+	Part 2
+	
+	+ Files Modified
+		main.cc
+	
+	+ Files Added
+		problem2.cc
+		
+	+ Function modified
+		in main.cc
+			#ifdef THREADS
+			extern void Problem2(void), TestSuite(void);
+			#endif
+			
+			#ifdef THREADS
+			//ThreadTest();
+			if (!strcmp(*argv, "-T"))               // Test Suite: link for this code is at the bottom of part 1 description
+				TestSuite();
+			if (!strcmp(*argv, "-P2"))               // Problem 2: for part 2
+				Problem2();
+			#endif
+
+V. Testing:
+	Part 1
+
+	+ How to test
+
+		cd threads
+		nachos -T 
+
+	+ Test Output
+
+		test 1 (testing whether only the owner of the lock can release the lock): t1 is the owner of the lock, when other threads try to release the lock, it prompts that "Error: Only the Lock holder can release the Lock!"
+		test 2 (testing the deadlock): t1 acquires the lock l1 then signals c1, but there's no thread waiting on c1. After t1 releases l1, t2 acquires it then waits on c1, which results in a deadlock. test 2 does not completes finally.
+		test 3 (testing that threads will wait on the t3_c1 condition variable. Only one t3_waiter will be released): waiter 0-4 all wait on c1. signaler signals once and only waiter 0 is freed from the condition t3_c1
+		test 4 (testing that these threads will wait on the t4_c1 condition variable. All t4_waiters will be released): waiter 0-4 all wait on c1. signaler broadcasts and all the waiters are freed from the condition t3_c1
+		test 5 (testing whether a condition variable is binder to the same lock): t5_t1 acquires Lock t5_l1, waiting on t5_c1; t5_t2 acquires Lock t5_l2, signaling t5_c1. And then it prompts that "Error: A Condition Variable should be binded to the same Lock object!" 
+
+	Part 2
+
+	+ How to test
+
+		cd threads
+		nachos -P2
+		when prompts "For the System Test, press 0. For the Simple Test for the requirement 1-6, press the corresponding number from 1-6."
+			to system test: just input the number of each entity interactively, press 0
+			to test 1 "Child Patients are never abandoned by their Parent, nor go anywhere without their Parent.", press 1
+			to test 2 "Waiting Room Nurses only talk to one Patient/Parent at a time.", press 2
+			to test 3 "Cashiers only talk to one Patient/Parent at a time.", press 3
+			to test 4 "Patients/Parents never go anywhere without being escorted by a Nurse.", press 4
+			to test 5 "All Patients leave the Doctor's Office. No one stays in the Waiting Room, Examination Room, or Xray Room, forever.", press 5
+			to test 6 "Two Doctors never examine the same Patient at the same time.", press 6
+
+	+ Test Output
+
+		system test: the outputs vary among different kinds of inputs.
+		test 1: parent always appears binded with the same index of child, and they usually show up in pair
+			for example:  when nurse gives child a shot, parent also shows up there
+					Nurse [1] asks Adult Patient/Parent [0] "Are you ready for the shot?"
+					Parent [0] says, "He is ready for the shot".
+					Child patient [0] has been given a shot.
+					Nurse [1] tells Adult Patient/Parent [0] "Your shot is over".
+		test 2:	waiting room nurse always interacts with one patient at a time, and there's no other act intervening, no matter in GETFORM process or in GIVEFORM process.
+			for example: 	when patient comes to hand over the form
+					[Adult patient] submits the filled form to the Waiting Room Nurse.
+					Waiting Room nurse accepts the form from Adult Patient/Parent with name [Patient_1 ] and age [56].
+					Waiting Room nurse creates an examination sheet for [Adult/Child] patient with name [Patient_1 ] and age [56].
+					Waiting Room nurse tells the Adult Patient/Parent [1] to wait in the waiting room for a nurse.
+		test 3: cashier always interacts with one patient at a time, and there's no other act intervening in.
+			for example: 	Parent [2] enters the queue for Cashier.
+					Parent [2] reaches the Cashier.
+					Parent [2] hands over Child Patient [2]'s examination sheet to the Cashier.
+					Cashier receives the examination sheet for Child Patient [2] from Parent [2].
+					Cashier reads the examination sheet of Child Patient [2] and asks Parent [2] to pay $168.
+					Parent [2] pays the Cashier $168.
+					Cashier accepts $168 from Parent [2].
+					Cashier gives a receipt of $168 to Parent [2].
+					Parent [2] receives a receipt for Child Patient [2] from the Cashier.
+					Cashier waits for the Patient to leave.
+					Parent [2] leaves the doctor's office with Child Patient [2].
+		test 4:	every time patient goes to anywhere, there's an output before telling that "Nurse escorts Adult Patient /Parent to XXX."
+			for example:    Nurse [0] escorts Adult Patient /Parent [0] to the examination room.
+					[Adult Patient] [0] is following Nurse [0] to Examination Room [0].
+					[Adult Patient] [0] has arrived at Examination Room [0].
+		test 5: there are outputs "Parent [identifier] leaves the doctor's office with Child Patient [identifier]." and "Adult Patient [identifier] leaves the doctor's office." for every patient. And no one gets stuck in anywhere.
+			for example: 	when we have 2 Adult Patients and 2 Parent/Child Patients
+					Adult Patient [0] leaves the doctor's office.
+					Parent [2] leaves the doctor's office with Child Patient [2].
+					Parent [3] leaves the doctor's office with Child Patient [3].
+					Adult Patient [1] leaves the doctor's office.
+		test 6: one doctor only diagnoses one patient at a time. Also one patient is examined by one doctor at a time.
+			for example:	Doctor [0] is leaving their office.
+					Nurse [0] hands over to the Doctor [0] the examination sheet of Adult/Child Patient [0].
+					Doctor [0] is reading the examination sheet of [Adult/Child] Patient [0] in Examination room [0].
+					Doctor [0] diagnoses [Adult/Child] Patient [0] to be fine and is leaving Examination Room [0].
+					Adult Patient [0] has been diagnosed by Doctor [0].
+		
+VI. Discussion:
+
+	Many of the errors in our program turned out to be Nachos issues rather than the operation of doctor's office simulation.
+	Most other issues in the doctor's office arose from typos and misuses of certain locks and conditions, which we corrected them finally.
+	We try to improve and embellish our codes and use dynamic allocation to make it more perfect.
