@@ -17,7 +17,7 @@
 #define MAX_XRAY 2
 #define MAX_EXAM 5
 #define XRAY_IMAGE 3
-#define MAX_MEM 1000
+#define MAX_MEM 3000
 
 //----------------------------------------------------------------------
 // Global data structures.
@@ -116,6 +116,7 @@ int examRoomSecondTimeID[MAX_XRAY];	// the ID for the Examination Room in the se
 int xrayRoomID[MAX_XRAY];
 int xrayPatientID[MAX_XRAY];
 int parentTellChildDocID[MAX_MEM];	// dynamic allocation.
+//int* parentTellChildDocID;
 List* nurseTakeSheetID;
 List* xrayWaitList[MAX_XRAY];
 List* cashierWaitList;
@@ -1715,12 +1716,12 @@ void Problem2(void)
 			fprintf(stderr, "The interval of the number of the Xray Technicians is [1, 2].\n");
 			return;
 		}
-		if(numberOfAdults < 0 || numberOfAdults > 150){
-			fprintf(stderr, "The interval of the number of the Patients is [0, 150].\n");
+		if(numberOfAdults < 0 || numberOfAdults > 1000){
+			fprintf(stderr, "The interval of the number of the Patients is [0, 1000].\n");
 			return;
 		}
-		if(numberOfChildren < 30 || numberOfChildren > 150){
-			fprintf(stderr, "The interval of the number of the Parents/Child Patients is [30, 150].\n");
+		if(numberOfChildren < 30 || numberOfChildren > 1000){
+			fprintf(stderr, "The interval of the number of the Parents/Child Patients is [30, 1000].\n");
 			return;
 		}
 		if(numberOfExamRooms < 2 || numberOfExamRooms > 5){
