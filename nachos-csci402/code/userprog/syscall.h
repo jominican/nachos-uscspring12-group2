@@ -29,6 +29,15 @@
 #define SC_Close	8
 #define SC_Fork		9
 #define SC_Yield	10
+#define SC_CreateLock 11
+#define SC_DestroyLock 12
+#define SC_Acquire 13
+#define SC_Release 14
+#define SC_CreateCondition 15
+#define SC_DestroyCondition 16
+#define SC_Wait 17
+#define SC_Signal 18
+#define SC_Broadcast 19
 
 #define MAXFILENAME 256
 
@@ -110,8 +119,6 @@ int Read(char *buffer, int size, OpenFileId id);
 /* Close the file, we're done reading and writing to it. */
 void Close(OpenFileId id);
 
-
-
 /* User-level thread operations: Fork and Yield.  To allow multiple
  * threads to run within a user program. 
  */
@@ -124,7 +131,54 @@ void Fork(void (*func)());
 /* Yield the CPU to another runnable thread, whether in this address space 
  * or not. 
  */
-void Yield();		
+void Yield();	
+
+/*
+ * Perform the Lock constructor.
+ */
+int CreateLock(char*, int);
+
+/*
+ * Perform the Lock destructor.
+ */
+int DestroyLock(int);
+
+/*
+ * Perform the Condition Variable constructor.
+ */
+int CreateCondition(char*, int);
+
+/*
+ * Perform the Condition Variable destructor.
+ */
+int DestroyCondition(int);
+
+/*
+ * Acquire the lock
+ */
+int Acquire(int);
+
+/*
+ * Release the lock
+ */
+int Release(int);
+
+/*
+ * Wait on Condition Variable
+ */
+void Wait(int, int);
+
+/*
+ * Signal in Condition Variable
+ */
+void Signal(int, int);
+
+/*
+ * Broadcast in Condition Variable
+ */
+void Broadcast(int, int);
+
+
 
 #endif /* IN_ASM */
 
