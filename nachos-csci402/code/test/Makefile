@@ -31,7 +31,7 @@ CPP = $(GCCDIR)cpp
 INCDIR =-I../userprog -I../threads
 CFLAGS = -G 0 -c $(INCDIR)
 
-all: halt matmult sort testfiles
+all: halt matmult sort testfiles acquirelock releaselock wait signal broadcast createlock createcondition destroylock destroycondition exec test_ExecFile
 
 start.o: start.s ../userprog/syscall.h
 	$(CPP) $(CPPFLAGS) start.s > strt.s
@@ -61,6 +61,72 @@ testfiles.o: testfiles.c
 testfiles: testfiles.o start.o
 	$(LD) $(LDFLAGS) start.o testfiles.o -o testfiles.coff
 	../bin/coff2noff testfiles.coff testfiles
+
+acquirelock.o: acquirelock.c
+	$(CC) $(CFLAGS) -c acquirelock.c
+acquirelock: acquirelock.o start.o
+	$(LD) $(LDFLAGS) start.o acquirelock.o -o acquirelock.coff
+	../bin/coff2noff acquirelock.coff acquirelock
+
+releaselock.o: releaselock.c
+	$(CC) $(CFLAGS) -c releaselock.c
+releaselock: releaselock.o start.o
+	$(LD) $(LDFLAGS) start.o releaselock.o -o releaselock.coff
+	../bin/coff2noff releaselock.coff releaselock
+
+wait.o: wait.c
+	$(CC) $(CFLAGS) -c wait.c
+wait: wait.o start.o
+	$(LD) $(LDFLAGS) start.o wait.o -o wait.coff
+	../bin/coff2noff wait.coff wait
+
+signal.o: signal.c
+	$(CC) $(CFLAGS) -c signal.c
+signal: signal.o start.o
+	$(LD) $(LDFLAGS) start.o signal.o -o signal.coff
+	../bin/coff2noff signal.coff signal
+
+broadcast.o: broadcast.c
+	$(CC) $(CFLAGS) -c broadcast.c
+broadcast: broadcast.o start.o
+	$(LD) $(LDFLAGS) start.o broadcast.o -o broadcast.coff
+	../bin/coff2noff broadcast.coff broadcast
+
+createlock.o: createlock.c
+	$(CC) $(CFLAGS) -c createlock.c
+createlock: createlock.o start.o
+	$(LD) $(LDFLAGS) start.o createlock.o -o createlock.coff
+	../bin/coff2noff createlock.coff createlock
+
+createcondition.o: createcondition.c
+	$(CC) $(CFLAGS) -c createcondition.c
+createcondition: createcondition.o start.o
+	$(LD) $(LDFLAGS) start.o createcondition.o -o createcondition.coff
+	../bin/coff2noff createcondition.coff createcondition
+
+destroylock.o: destroylock.c
+	$(CC) $(CFLAGS) -c destroylock.c
+destroylock: destroylock.o start.o
+	$(LD) $(LDFLAGS) start.o destroylock.o -o destroylock.coff
+	../bin/coff2noff destroylock.coff destroylock
+
+destroycondition.o: destroycondition.c
+	$(CC) $(CFLAGS) -c destroycondition.c
+destroycondition: destroycondition.o start.o
+	$(LD) $(LDFLAGS) start.o destroycondition.o -o destroycondition.coff
+	../bin/coff2noff destroycondition.coff destroycondition
+
+exec.o: exec.c
+	$(CC) $(CFLAGS) -c exec.c
+exec: exec.o start.o
+	$(LD) $(LDFLAGS) start.o exec.o -o exec.coff
+	../bin/coff2noff exec.coff exec
+
+test_ExecFile.o: test_ExecFile.c
+	$(CC) $(CFLAGS) -c test_ExecFile.c
+test_ExecFile: test_ExecFile.o start.o
+	$(LD) $(LDFLAGS) start.o test_ExecFile.o -o test_ExecFile.coff
+	../bin/coff2noff test_ExecFile.coff test_ExecFile
 
 clean:
 	rm -f *.o *.coff

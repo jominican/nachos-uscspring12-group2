@@ -21,6 +21,7 @@
 
 #define MaxOpenFiles 256
 #define MaxChildSpaces 256
+#define Max_Threads 200	// maximum number of threads in a so-called user program.
 
 class AddrSpace {
   public:
@@ -32,15 +33,18 @@ class AddrSpace {
     void InitRegisters();		// Initialize user-level CPU registers,
 					// before jumping to user code
 
+	int AllocateStackPages(int); // Allocate (8) stack pages for the thread.
     void SaveState();			// Save/restore address space-specific
     void RestoreState();		// info on a context switch
     Table fileTable;			// Table of openfiles
 
  private:
     TranslationEntry *pageTable;	// Assume linear page table translation
+	int* stackArrays;
 					// for now!
     unsigned int numPages;		// Number of pages in the virtual 
 					// address space
+	int* virToPhy;	// Virtual memory to physical memory mapping.
 };
 
 #endif // ADDRSPACE_H

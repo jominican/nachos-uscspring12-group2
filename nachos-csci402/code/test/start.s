@@ -194,13 +194,13 @@ Signal:
 	j	$31
 	.end Signal
 	
-	.globl Broadcast
-	.ent	Broadcast
-Broadcast:
-	addiu $2,$0,SC_Broadcast
+	.globl BroadCast
+	.ent	BroadCast
+BroadCast:
+	addiu $2,$0,SC_BroadCast
 	syscall
 	j	$31
-	.end Broadcast
+	.end BroadCast
 	
 	
 	

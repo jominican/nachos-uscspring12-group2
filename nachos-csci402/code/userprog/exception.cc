@@ -24,11 +24,16 @@
 #include "copyright.h"
 #include "system.h"
 #include "syscall.h"
+#include "console.h"
+#include "addrspace.h"
 #include "bitmap.h"
-#include <stdio.h>
-#include <iostream>
 #include "synch.h"
 
+#include <stdio.h>
+#include <iostream>
+
+// Define the maximum number of the user program.
+#define MAX_PROCESS 3
 #define MAX_LOCK 5001
 #define MAX_CV  5001
 
@@ -38,25 +43,46 @@ using namespace std;
 struct KernelLock{
 	Lock* lock;
 	AddrSpace* addrSpace;
-	bool isDeleted;
-	bool isToBeDeleted;
+	bool isDeleted;	// the current state of the kernel lock.
+	bool isToBeDeleted;	// valid to delete.
 };
 
 // System call CV.
 struct KernelCV{
 	Condition* cv;
 	AddrSpace* addrSpace;
-	bool isDeleted;
-	bool isToBeDeleted;
+	bool isDeleted;	// the current state of the kernel cv.
+	bool isToBeDeleted;	// valid to delete.
 };
 
+// Address struct to run a thread.
+struct Addr {
+	AddrSpace* space;
+	int vaddr; 
+	int nvaddr; 	// 8 stack pages address.
+};
+
+// User program.
+struct Process{
+	int processID;
+	int totalThread;	// for thread ID.
+	int activeThread;	// for check the live thread number.
+};
+
+int processID = 0;
 KernelLock* kernelLock[MAX_LOCK];
 KernelCV* kernelCV[MAX_CV];
+Process* process = new Process[MAX_PROCESS];
 
 Lock* lockForLock = new Lock("lockForLock");
 Lock* lockForCV = new Lock("lockForCV");
-BitMap lockBM(MAX_LOCK);
-BitMap cvBM(MAX_CV);
+Lock* lockForProcess = new Lock("lockForProcess");	
+//Lock* lockForThread = new Lock("lockForThread");
+//Lock* lockForExit = new Lock("lockForExit");
+BitMap* lockBM = new BitMap(MAX_LOCK);
+BitMap* cvBM = new BitMap(MAX_CV);
+//BitMap lockBM(MAX_LOCK);
+//BitMap cvBM(MAX_CV);
 
 int copyin(unsigned int vaddr, int len, char *buf) {
     // Copy len bytes from the current thread's virtual address vaddr.
@@ -260,6 +286,7 @@ void Close_Syscall(int fd) {
     }
 }
 
+// The implementation of the CreateLock() system call.
 int CreateLock_Syscall(unsigned int vaddr, int len)
 {
 	// Kernel buffer to load the name of the Lock.
@@ -271,6 +298,7 @@ int CreateLock_Syscall(unsigned int vaddr, int len)
 		return -1;
 	}
 	
+	buf[len] = '\0';
 	// Check for the copy in operation from vaddr to buf with len bytes..
 	if(-1 == copyin(vaddr, len, buf)){
 		printf("%s","Bad pointer passed to CreateLock.\n");
@@ -279,12 +307,16 @@ int CreateLock_Syscall(unsigned int vaddr, int len)
 	}
 	
 	lockForLock->Acquire();
-	int index = lockBM.Find();
+	
+	int index = lockBM->Find();
 	if(-1 == index){	// whether there is a available Kernel Lock.
 		printf("%s", "Can't find available Kernel Lock.\n");
 		lockForLock->Release();
 		return -1;
 	}
+	
+	DEBUG('t', "Create Lock \"%s\"\n", buf);
+	
 	// Construct a new Kernel Lock with the name of buf, located in position 
 	// index of the kernelLock table.
 	Lock* lock = new Lock(buf);
@@ -300,6 +332,7 @@ int CreateLock_Syscall(unsigned int vaddr, int len)
 	return index;
 }
 
+// The implementation of the DestroyLock() system call.
 int DeleteLock_Syscall(int lockIndex)
 {
 	lockForLock->Acquire();
@@ -318,11 +351,13 @@ int DeleteLock_Syscall(int lockIndex)
 		return -1;
 	}
 	
+	DEBUG('t', "Delete Lock %d\n", lockIndex);
+	
 	// Check the status of the kernel lock.
 	if(kernelLock[lockIndex]->isToBeDeleted){
 		// Here, we can run the delete operation.
 		delete kernelLock[lockIndex]->lock;
-		lockBM.Clear(lockIndex);	// clear the BitMap bit.
+		lockBM->Clear(lockIndex);	// clear the BitMap bit.
 		kernelLock[lockIndex]->addrSpace = NULL;
 		kernelLock[lockIndex]->isDeleted = true;
 		kernelLock[lockIndex]->isToBeDeleted = false;
@@ -337,6 +372,7 @@ int DeleteLock_Syscall(int lockIndex)
 	return 0;
 }
 
+// The implementation of the CreateCondition() system call.
 int CreateCondition_Syscall(unsigned int vaddr, int len)
 {
 	// Kernel buffer to load the name of the CV.
@@ -348,6 +384,7 @@ int CreateCondition_Syscall(unsigned int vaddr, int len)
 		return -1;
 	}
 	
+	buf[len] = '\0';
 	// Check for the copy in operation from vaddr to buf with len bytes..
 	if(-1 == copyin(vaddr, len, buf)){
 		printf("%s","Bad pointer passed to CreateCondition.\n");
@@ -356,12 +393,15 @@ int CreateCondition_Syscall(unsigned int vaddr, int len)
 	}
 	
 	lockForCV->Acquire();
-	int index = cvBM.Find();
+	int index = cvBM->Find();
 	if(-1 == index){ // whether there is a available Kernel CV.
 		printf("%s", "Can't find available Kernel Condition Variable.\n");
 		lockForCV->Release();
 		return -1;
 	}
+	
+	DEBUG('t', "Create Condition \"%s\"\n", buf);
+	
 	// Construct a new Kernel CV with the name of buf, located in position 
 	// index of the kernelCV table.
 	Condition* cv = new Condition(buf);
@@ -377,6 +417,7 @@ int CreateCondition_Syscall(unsigned int vaddr, int len)
 	return index;
 }
 
+// The implementation of the DestroyCondition() system call.
 int DeleteCondition_Syscall(int cvIndex)
 {
 	lockForCV->Acquire();
@@ -395,11 +436,13 @@ int DeleteCondition_Syscall(int cvIndex)
 		return -1;
 	}
 	
+	DEBUG('t', "Delete Condition %d\n", cvIndex);
+	
 	// Check the status of the kernel cv.
 	if(kernelCV[cvIndex]->isToBeDeleted){
 		// Here, we can run the delete operation.
 		delete kernelCV[cvIndex]->cv;
-		cvBM.Clear(cvIndex);	// clear the BitMap bit.
+		cvBM->Clear(cvIndex);	// clear the BitMap bit.
 		kernelCV[cvIndex]->addrSpace = NULL;
 		kernelCV[cvIndex]->isDeleted = true;
 		kernelCV[cvIndex]->isToBeDeleted = false;
@@ -414,6 +457,7 @@ int DeleteCondition_Syscall(int cvIndex)
 	return 0;
 }
 
+// The implementation of the Acquire() system call.
 int Acquire_Syscall(int lockId){
 	lockForLock->Acquire();
 	if (lockId < 0 || lockId > MAX_LOCK) {
@@ -432,14 +476,18 @@ int Acquire_Syscall(int lockId){
 		lockForLock->Release();
 		return -1;
 	}
+	
+	DEBUG('t', "Acquire Lock %d\n", lockId);
+	
 	//if all the conditions are satisfied, acquire the lock
 	kernelLock[lockId]->lock->Acquire();
-	kernelLock[lockId]->isToBeDeleted = false;
+	kernelLock[lockId]->isToBeDeleted = false;	// acquired by a user program, can't be deleted.
 	lockForLock->Release();
 	return 0;
 }
 
-void Release_Syscall(int lockId){
+// The implementation of the Release() system call.
+int Release_Syscall(int lockId){
 	lockForLock->Acquire();
 	if (lockId < 0 || lockId > MAX_LOCK) {
 		//check if the lock id is within the range
@@ -457,16 +505,19 @@ void Release_Syscall(int lockId){
 		lockForLock->Release();
 		return -1;
 	}
+	
+	DEBUG('t', "Release Lock %d\n", lockId);
+	
 	//if all the conditions are satisfied, release the lock
 	kernelLock[lockId]->isToBeDeleted = true;
-	kernelLock[lockId]->lock->Release();
+	kernelLock[lockId]->lock->Release();	// released by a user program, can be deleted.
 	lockForLock->Release();
 	return 0;
 }
 
 int detect_Lock(int lockId, int conditionId)
 {
-	if(lockId < 0 || lockId >= MAX_LOCK ||kernelLock[lockId] == NULL 
+	if(lockId < 0 || lockId >= MAX_LOCK || kernelLock[lockId] == NULL 
 	   || kernelLock[lockId]->lock == NULL){  //The lock doesn't exist
         fprintf(stdout, "The lock %d doesn't exist or has been deleted.\n", lockId);
 		return -1;
@@ -483,7 +534,7 @@ int detect_Lock(int lockId, int conditionId)
 }
 
 int detect_CV(int lockId, int conditionId){
-	if(conditionId < 0 || conditionId >= MAX_CV ||kernelCV[conditionId] == NULL
+	if(conditionId < 0 || conditionId >= MAX_CV || kernelCV[conditionId] == NULL
 	   || kernelCV[conditionId]->cv == NULL){ //the condition variable doesn't exist
 		fprintf(stdout, "Condition %d doesn't exist or has been deleted.\n", conditionId);
 		return -1;
@@ -495,53 +546,297 @@ int detect_CV(int lockId, int conditionId){
 	return 0;
 }
 
-//implement the sysCall of condition->wait
-void Wait_Syscall(int lockId, int conditionId){
+//The implementation of the Wait() system call.
+int Wait_Syscall(int lockId, int conditionId){
 	lockForLock->Acquire();
+	
+	DEBUG('t', "Check if Lock %d is validated\n", lockId);
+	
 	if(detect_Lock(lockId, conditionId) == -1){ //detect data validation
 		lockForLock->Release();
-		return;
+		return -1;
 	}
+	
 	lockForCV->Acquire();
+	
+	DEBUG('t', "Check if Condition %d is validated\n", conditionId);
+	
 	if(detect_Lock(lockId, conditionId) == -1){ //detect data validation
 		lockForCV->Release();
-		return;
+		return -2;
 	}
 	lockForCV->Release();
+	
+	DEBUG('t', "Wait on Condition %d with Lock %d\n", conditionId, lockId);
+		
     kernelCV[conditionId]->cv->Wait(kernelLock[lockId]->lock);
+	return 0;
 }
 
-//implement the system call for signal
-void Signal_Syscall(int lockId, int conditionId){
+// The implementation of the Signal() system call.
+int Signal_Syscall(int lockId, int conditionId){
 	lockForLock->Acquire();
+	
+	DEBUG('t', "Check if Lock %d is validate\n", lockId);
+	
 	if(detect_Lock(lockId, conditionId) == -1){ //detect data validation
 		lockForLock->Release();
-		return;
+		return -1;
 	}
 	lockForCV->Acquire();
+	
+	DEBUG('t', "Check if Condition %d is validate\n", conditionId);
+	
 	if(detect_Lock(lockId, conditionId) == -1){ //detect data validation
 		lockForCV->Release();
-		return;
+		return -2;
 	}
+	
+	DEBUG('t', "Signal Condition %d with Lock %d\n", conditionId, lockId);
+	
 	kernelCV[conditionId]->cv->Signal(kernelLock[lockId]->lock); //call function:Signal
 	lockForCV->Release();
+	return 0;
 	
 }
 
-//implement the system call of broadCast
-void Broadcast_Syscall(int lockId, int conditionId){
+// The implementation of the BroadCast() system call.
+int BroadCast_Syscall(int lockId, int conditionId){
 	lockForLock->Acquire();
+	
+	DEBUG('t', "Check if Lock %d is validate\n", lockId);
+	
 	if(detect_Lock(lockId, conditionId) == -1){ //detect data validation
 		lockForLock->Release();
-		return;
+		return -1;
 	}
 	lockForCV->Acquire();
+	
+	DEBUG('t', "Check if Condition %d is validate\n", conditionId);
+	
 	if(detect_Lock(lockId, conditionId) == -1){ //detect data validation
 		lockForCV->Release();
-		return;
+		return -2;
 	}
+	
+	DEBUG('t', "BroadCast Condition %d with Lock %d\n", conditionId, lockId);
+	
 	kernelCV[conditionId]->cv->Broadcast(kernelLock[lockId]->lock); //call function: broadCast.
 	lockForCV->Release();
+	return 0;
+}
+
+void Run_KernelProcess(int space)
+{
+	DEBUG('t', "Run kernel process.\n");
+	((AddrSpace*)space)->InitRegisters();
+	((AddrSpace*)space)->RestoreState();
+	//currentThread->space->InitRegisters();
+	//currentThread->space->RestoreState();
+	machine->Run();	// run the program stored in the "physical" memory.
+}
+
+// The implementation of the Exec() system call.
+// In fact, we just return 0 when Exec() succeed, and -1 when fail.
+typedef int SpaceId;
+SpaceId Exec_Syscall(unsigned int vaddr, int len)
+{
+	// Kernel buffer to load the name of the executable file.
+	char* buf = new char[len+1];
+	
+	// Check for the allocation of the kernel buffer.	
+	if(!buf){
+		printf("%s", "Can't allocate kernel buffer in Exec.\n");
+		return -1;
+	}
+	
+	buf[len] = '\0';
+	// Check for the copy in operation from vaddr to buf with len bytes..
+	if(-1 == copyin(vaddr, len, buf)){
+		printf("%s","Bad pointer passed to Exec.\n");
+		delete[] buf;
+		return -1;
+	}
+	
+	// Open the executable file (user program).
+	printf("buffer %s\n", buf);
+	OpenFile* executable = fileSystem->Open(buf);
+	if(NULL == executable){
+		printf("Unable to open file %s.\n", buf);
+		delete[] buf;
+		return -1;
+	}
+	
+	// Load the executable file into physical memory.
+	lockForProcess->Acquire();
+	AddrSpace* space = new AddrSpace(executable);	// need to check return value?
+	
+	// Initialize the process information.
+	if(processID < MAX_PROCESS){
+		process[processID].processID = processID;	// ugly naming.
+		process[processID].totalThread = 1;	// the number of kernel threads in the user program.
+		process[processID].activeThread = 1;	// the number of active kernel threads in the user program.
+	}else{ 	// exceed the maximum number of user programs we support.
+		printf("Can't create more than %d user programs.\n", MAX_PROCESS);
+		delete[] buf;
+		delete executable;
+		lockForProcess->Release();
+		return -1;
+	}
+	
+	// Fork a new kernel thread to take the place of the user program.
+	Thread* thread = new Thread("thread");
+	thread->space = space;
+	thread->threadID = 0;	// first thread for the user program.
+	thread->processID = process[processID++].processID;
+	thread->Fork(Run_KernelProcess, (int)(thread->space));
+	DEBUG('t', "The information of the user program is space: %d, threadID: %d, processID: %d.\n", 
+			thread->space, thread->threadID, thread->processID);
+	// Why cannot use the following method?
+	//thread->space->InitRegisters();		// set the initial register values
+    //thread->space->RestoreState();		// load page table register
+	//machine->Run();			// jump to the user progam
+	delete[] buf;
+	delete executable;
+	lockForProcess->Release();
+	// Execute user program successed.
+	return 0;
+}
+
+void Run_KernelThread(int addr)
+{
+	// Init registers.
+	for(int i = 0; i< NumTotalRegs; ++i){
+		machine->WriteRegister(i, 0);
+	}
+	machine->WriteRegister(PCReg, ((Addr*)addr)->vaddr);
+	machine->WriteRegister(NextPCReg, ((Addr*)addr)->vaddr + 4);
+	machine->WriteRegister(StackReg, ((Addr*)addr)->nvaddr);
+	((Addr*)addr)->space->RestoreState();
+	
+	machine->Run();
+}
+
+// The implementation of the Fork() system call.
+int Fork_Syscall(unsigned int vaddr)
+{
+	//lockForThread->Acquire();
+	lockForProcess->Acquire();
+	
+	// Check the validation of the virtual address.
+	if(0 == vaddr || vaddr < 0 || (vaddr%4) != 0){
+		printf("Invalid virtual address.\n");
+		//lockForThread->Release();
+		lockForProcess->Release();
+		return -1;
+	}
+	
+	Thread* thread = new Thread("Thread");
+	
+	thread->space = currentThread->space;
+	thread->threadID = process[currentThread->processID].totalThread;
+	thread->processID = currentThread->processID;
+	++process[thread->processID].totalThread;	// add one thread to the current user program.
+	++process[thread->processID].activeThread;	// add one active thread to the current user program.
+	// Allocate another 8 pages for the thread.
+	int nvaddr = thread->space->AllocateStackPages(thread->threadID);
+	DEBUG('t', "The information of the forked thread is space: %d, stack space: %d, threadID: %d, processID: %d.\n", 
+			thread->space, nvaddr, thread->threadID, thread->processID);
+	
+	// Address struct to pass to the Run_ routine.
+	Addr* addr = new Addr;
+	addr->space = thread->space;
+	addr->vaddr = vaddr;
+	addr->nvaddr = nvaddr;
+	thread->Fork(Run_KernelThread, (int)addr);	
+	
+	//lockForThread->Release();
+	lockForProcess->Release();
+	return 0;
+}
+
+int activeThreadNum()
+{
+	int sum = 0;
+	for(int i = 0; i < processID; ++i){
+		sum += process[i].activeThread;
+	}
+	return sum;
+}
+
+// The implementation of the Exit() system call.
+void Exit_Syscall(int status)
+{
+	// Exit with signal.
+	if(status){
+		printf("User program exit with signal %d.\n", status);
+		return;
+	}
+	//lockForExit->Acquire();
+	lockForProcess->Acquire();
+	//--process[currentThread->processID]->totalThread;
+	--process[currentThread->processID].activeThread;
+	
+	if(process[currentThread->processID].activeThread != 0){		// not the last thread for neither of the situations.
+		// Need to deallocated the 8 pages stack?	
+		lockForProcess->Release();
+		currentThread->Finish();
+	}else{		// the last thread for the current user program.
+		// When end a user program, we should deallocated all of the 
+		// resources it holds, such as the Locks and CVs.
+		// The Locks and CVs may have been destroyed by the user program,
+		// we just check and make sure the deallocation.
+		
+		// Deallocate the Locks.
+		lockForLock->Acquire();
+		for(int i = 0; i < MAX_LOCK; ++i){
+			if(kernelLock[i] != NULL && kernelLock[i]->addrSpace == currentThread->space)
+				if(lockBM->Test(i)){
+					delete kernelLock[i]->lock;
+					lockBM->Clear(i);	// clear the BitMap bit.
+					kernelLock[i]->addrSpace = NULL;
+					kernelLock[i]->isDeleted = true;
+					kernelLock[i]->isToBeDeleted = false;	// can't be deleted.
+				}
+		}
+		lockForLock->Release();
+		
+		// Deallocate the CVs.
+		lockForCV->Acquire();
+		for(int i = 0; i < MAX_CV; ++i){
+			if(kernelCV[i] != NULL && kernelCV[i]->addrSpace == currentThread->space)
+				if(cvBM->Test(i)){
+					delete kernelCV[i]->cv;
+					cvBM->Clear(i);	// clear the BitMap bit.
+					kernelCV[i]->addrSpace = NULL;
+					kernelCV[i]->isDeleted = true;
+					kernelCV[i]->isToBeDeleted = false;	// can't be deleted.
+				}
+		}
+		lockForCV->Release();
+		
+		delete currentThread->space;	// must be deleted at last.
+		if(activeThreadNum() != 0){	// not the last thread for all of the user programs.
+			lockForProcess->Release();
+			currentThread->Finish();
+		}
+	}
+	
+	// The last thread for all of the user programs.
+	if(0 == activeThreadNum()){
+		lockForProcess->Release();
+		interrupt->Halt();
+	}
+	
+	lockForProcess->Release();
+	// Exit succeed.
+	return;
+}
+
+// The implementation of the Yield() system call.
+void Yield_Syscall()
+{
+	currentThread->Yield();
 }
 
 void ExceptionHandler(ExceptionType which) {
@@ -608,18 +903,35 @@ void ExceptionHandler(ExceptionType which) {
 			break;
 		case SC_Wait:
 			DEBUG('a', "Wait CV syscall.\n");
-			Wait_Syscall(machine->ReadRegister(4),
+			rv = Wait_Syscall(machine->ReadRegister(4),
 							  machine->ReadRegister(5));
 			break;
 		case SC_Signal:
 			DEBUG('a', "Signal CV syscall.\n");
-			Signal_Syscall(machine->ReadRegister(4),
+			rv = Signal_Syscall(machine->ReadRegister(4),
 								machine->ReadRegister(5));
 			break;
-		case SC_Broadcast:
-			DEBUG('a', "Broadcast CV syscall.\n");
-			Broadcast_Syscall(machine->ReadRegister(4),
+		case SC_BroadCast:
+			DEBUG('a', "BroadCast CV syscall.\n");
+			rv = BroadCast_Syscall(machine->ReadRegister(4),
 								   machine->ReadRegister(5));
+			break;
+		case SC_Exit:
+			DEBUG('a', "Exit syscall.\n");
+			Exit_Syscall(machine->ReadRegister(4));
+			break;
+		case SC_Exec:
+			DEBUG('a', "Exec syscall.\n");
+			rv = Exec_Syscall(machine->ReadRegister(4),
+							  machine->ReadRegister(5));
+			break;
+		case SC_Fork:
+			DEBUG('a', "Fork syscall.\n");
+			rv = Fork_Syscall(machine->ReadRegister(4));
+			break;
+		case SC_Yield:
+			DEBUG('a', "Yield syscall.\n");
+			Yield_Syscall();
 			break;
 			
 	}
