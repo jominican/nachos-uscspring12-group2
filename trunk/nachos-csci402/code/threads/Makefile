@@ -242,8 +242,8 @@ threadtest.o: ../threads/threadtest.cc ../threads/copyright.h \
   ../threads/scheduler.h ../threads/list.h ../machine/interrupt.h \
   ../threads/list.h ../machine/stats.h ../machine/timer.h \
   ../threads/utility.h ../threads/synch.h
-problem2.o: ../threads/problem2.cc ../threads/copyright.h \
-  ../threads/system.h ../threads/utility.h ../threads/bool.h \
+problem2.o: ../threads/problem2.cc ../threads/thread.h \
+  ../threads/copyright.h ../threads/utility.h ../threads/bool.h \
   ../machine/sysdep.h ../threads/copyright.h \
   /usr/sfw/lib/gcc/sparc-sun-solaris2.10/3.4.3/include/stdio.h \
   /usr/include/stdarg.h /usr/include/iso/stdarg_iso.h \
@@ -264,10 +264,10 @@ problem2.o: ../threads/problem2.cc ../threads/copyright.h \
   /usr/include/sys/signal.h /usr/include/sys/iso/signal_iso.h \
   /usr/include/sys/unistd.h /usr/include/sys/ucontext.h \
   /usr/include/sys/regset.h /usr/include/v7/sys/privregs.h \
-  /usr/include/v7/sys/psr.h /usr/include/sys/fsr.h ../threads/thread.h \
-  ../threads/scheduler.h ../threads/list.h ../machine/interrupt.h \
-  ../threads/list.h ../machine/stats.h ../machine/timer.h \
-  ../threads/utility.h ../threads/synch.h
+  /usr/include/v7/sys/psr.h /usr/include/sys/fsr.h ../threads/synch.h \
+  ../threads/list.h ../threads/system.h ../threads/scheduler.h \
+  ../machine/interrupt.h ../threads/list.h ../machine/stats.h \
+  ../machine/timer.h ../threads/utility.h
 interrupt.o: ../machine/interrupt.cc \
   /usr/sfw/lib/gcc/sparc-sun-solaris2.10/3.4.3/include/stdio.h \
   /usr/include/stdarg.h /usr/include/iso/stdarg_iso.h \
@@ -569,7 +569,6 @@ timer.o: ../machine/timer.cc ../threads/copyright.h ../machine/timer.h \
   ../threads/utility.h ../threads/thread.h ../threads/scheduler.h \
   ../threads/list.h ../machine/interrupt.h ../threads/list.h \
   ../machine/stats.h ../machine/timer.h
-
 # DEPENDENCIES MUST END AT END OF FILE
 # IF YOU PUT STUFF HERE IT WILL GO AWAY
 # see make depend above

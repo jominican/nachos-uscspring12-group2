@@ -37,11 +37,36 @@
 #define SC_DestroyCondition 16
 #define SC_Wait 17
 #define SC_Signal 18
-#define SC_Broadcast 19
+#define SC_BroadCast 19
+
 
 #define MAXFILENAME 256
 
 #ifndef IN_ASM
+
+#ifndef va_arg
+
+#ifndef _VALIST
+
+#define _VALIST
+typedef char *va_list;
+#endif				/* _VALIST */
+
+/*
+ * Storage alignment properties
+ */
+#define  _AUPBND                (sizeof (int) - 1)
+#define  _ADNBND                (sizeof (int) - 1)
+
+/*
+ * Variable argument list macro definitions
+ */
+#define _bnd(X, bnd)            (((sizeof (X)) + (bnd)) & (~(bnd)))
+#define va_arg(ap, T)           (*(T *)(((ap) += (_bnd (T, _AUPBND))) - (_bnd (T,_ADNBND))))
+#define va_end(ap)              (void) 0
+#define va_start(ap, A)         (void) ((ap) = (((char *) &(A)) + (_bnd (A,_AUPBND))))
+
+#endif				/* va_arg */
 
 /* The system call interface.  These are the operations the Nachos
  * kernel needs to support, to be able to run user programs.
@@ -68,7 +93,7 @@ typedef int SpaceId;
 /* Run the executable, stored in the Nachos file "name", and return the 
  * address space identifier
  */
-SpaceId Exec(char *name);
+SpaceId Exec(char *name, int);
  
 /* Only return once the the user program "id" has finished.  
  * Return the exit status.
@@ -126,7 +151,7 @@ void Close(OpenFileId id);
 /* Fork a thread to run a procedure ("func") in the *same* address space 
  * as the current thread.
  */
-void Fork(void (*func)());
+int Fork(void (*func)());
 
 /* Yield the CPU to another runnable thread, whether in this address space 
  * or not. 
@@ -166,19 +191,17 @@ int Release(int);
 /*
  * Wait on Condition Variable
  */
-void Wait(int, int);
+int Wait(int, int);
 
 /*
  * Signal in Condition Variable
  */
-void Signal(int, int);
+int Signal(int, int);
 
 /*
- * Broadcast in Condition Variable
+ * BroadCast in Condition Variable
  */
-void Broadcast(int, int);
-
-
+int BroadCast(int, int);
 
 #endif /* IN_ASM */
 

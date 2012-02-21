@@ -21,6 +21,12 @@
 #include "noff.h"
 #include "table.h"
 #include "synch.h"
+#include "bitmap.h"
+#include "machine.h"
+
+//BitMap phyMemBM = new BitMap(NumPhysPages);
+BitMap* phyMemBM =  new BitMap(NumPhysPages);
+Lock* phyMemBMLock = new Lock("phyMemBMLock");
 
 extern "C" { int bzero(char *, int); };
 
@@ -120,6 +126,7 @@ SwapHeader (NoffHeader *noffH)
 AddrSpace::AddrSpace(OpenFile *executable) : fileTable(MaxOpenFiles) {
     NoffHeader noffH;
     unsigned int i, size;
+	unsigned int stackSize; //the num of pages of a stack for one thread
 
     // Don't allocate the input or output to disk files
     fileTable.Put(0);
@@ -132,11 +139,12 @@ AddrSpace::AddrSpace(OpenFile *executable) : fileTable(MaxOpenFiles) {
     ASSERT(noffH.noffMagic == NOFFMAGIC);
 
     size = noffH.code.size + noffH.initData.size + noffH.uninitData.size ;
-    numPages = divRoundUp(size, PageSize) + divRoundUp(UserStackSize,PageSize);
+	stackSize = divRoundUp(UserStackSize,PageSize);
+    numPages = divRoundUp(size, PageSize) + stackSize;
                                                 // we need to increase the size
 						// to leave room for the stack
     size = numPages * PageSize;
-
+	
     ASSERT(numPages <= NumPhysPages);		// check we're not trying
 						// to run anything too big --
 						// at least until we have
@@ -144,19 +152,43 @@ AddrSpace::AddrSpace(OpenFile *executable) : fileTable(MaxOpenFiles) {
 
     DEBUG('a', "Initializing address space, num pages %d, size %d\n", 
 					numPages, size);
-// first, set up the translation 
-    pageTable = new TranslationEntry[numPages];
+	// first, set up the translation 
+    pageTable = new TranslationEntry[numPages + stackSize*Max_Threads];
+	stackArrays = new int[numPages + stackSize*Max_Threads];	// the total pages for a user program.
+	virToPhy = new int[numPages + stackSize*Max_Threads];
+	
+	// The thread id for the first thread, only the first thread of the "so called process" will call this constructor
+	int currentThreadID = 0;
     for (i = 0; i < numPages; i++) {
-	pageTable[i].virtualPage = i;	// for now, virtual page # = phys page #
-	pageTable[i].physicalPage = i;
-	pageTable[i].valid = TRUE;
-	pageTable[i].use = FALSE;
-	pageTable[i].dirty = FALSE;
-	pageTable[i].readOnly = FALSE;  // if the code segment was entirely on 
-					// a separate page, we could set its 
-					// pages to be read-only
+		// Try to find a unused memory page in the physical memory.
+		phyMemBMLock->Acquire();
+		int phyMemPage = phyMemBM->Find();
+		phyMemBMLock->Release();
+		DEBUG('a', "The index of the physical memory is %d.\n", phyMemPage);
+		
+		if(-1 == phyMemPage){
+			printf("No enough physical memory to allocate.\n");
+			return;
+		}else{
+			virToPhy[i] = phyMemPage;
+		}
+		pageTable[i].virtualPage = i;	// for now, virtual page # = phys page #
+		pageTable[i].physicalPage = phyMemPage;	// support for multi-programming.
+		pageTable[i].valid = TRUE;
+		pageTable[i].use = FALSE;
+		pageTable[i].dirty = FALSE;
+		pageTable[i].readOnly = FALSE;  // if the code segment was entirely on 
+						// a separate page, we could set its 
+						// pages to be read-only
+		if(i >= (numPages - stackSize)){
+			stackArrays[i] = currentThreadID;
+		}else{
+			stackArrays[i] = -1;
+		}
+		executable->ReadAt(&(machine->mainMemory[phyMemPage*PageSize]), PageSize, i*PageSize+noffH.code.inFileAddr);
     }
     
+	/*
 // zero out the entire address space, to zero the unitialized data segment 
 // and the stack segment
     bzero(machine->mainMemory, size);
@@ -174,7 +206,7 @@ AddrSpace::AddrSpace(OpenFile *executable) : fileTable(MaxOpenFiles) {
         executable->ReadAt(&(machine->mainMemory[noffH.initData.virtualAddr]),
 			noffH.initData.size, noffH.initData.inFileAddr);
     }
-
+	*/
 }
 
 //----------------------------------------------------------------------
@@ -219,6 +251,53 @@ AddrSpace::InitRegisters()
    // accidentally reference off the end!
     machine->WriteRegister(StackReg, numPages * PageSize - 16);
     DEBUG('a', "Initializing stack register to %x\n", numPages * PageSize - 16);
+}
+
+//----------------------------------------------------------------------
+// AddrSpace::AllocateStackPages
+// allocate stack for a newly created thread
+//
+// We  copy the whole pageTable of the process to the pageTable of this thread,
+// then we add 8 pages as the stack at the end of the pageTable of the thread
+//----------------------------------------------------------------------
+
+int
+AddrSpace::AllocateStackPages(int threadID)
+{
+	if(threadID <= 0){
+		printf("Error in the 'threadID' when allocating stack for the thread.\n");
+		return -1;
+	}
+	int stackSize = divRoundUp(UserStackSize,PageSize); 
+	
+	int stackEndIndex = numPages + stackSize*threadID; //the end index of the stack for this thread
+	for(int i = numPages; i < stackEndIndex; ++i){
+		phyMemBMLock->Acquire();
+		int phyMemPage = phyMemBM->Find(); //Find an available physical memory page.
+		phyMemBMLock->Release();
+		DEBUG('a', "The index of the physical memory is %d.\n", phyMemPage);
+		if(phyMemPage == -1){
+			printf("No enough physical memory to allocate for a stack.\n");
+			return -1;
+		}
+		else{
+			virToPhy[i] = phyMemPage;
+		}
+		
+		pageTable[i].virtualPage = i;
+		pageTable[i].physicalPage = phyMemPage;	//Allocate the physical mem page to one page of the stack.
+		pageTable[i].valid = TRUE;
+		pageTable[i].use = FALSE;
+		pageTable[i].dirty = FALSE;
+		pageTable[i].readOnly = FALSE;  // if the code segment was entirely on 
+						// a separate page, we could set its 
+						// pages to be read-only
+              
+		stackArrays[i] = threadID; //To indicate that this virtual memory page stores the stack of the thead whose id is "threadID"
+	}
+	numPages = stackEndIndex;//update the numPages.
+	
+	return (numPages*PageSize-16);
 }
 
 //----------------------------------------------------------------------
