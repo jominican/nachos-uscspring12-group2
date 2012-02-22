@@ -301,14 +301,20 @@ AddrSpace::AllocateStackPages(int threadID)
 	return (numPages*PageSize-16);
 }
 
-int
+//------------------------------------------------------------------------------
+//AddrSpace::deleteStackPages
+//delete the stack for the thread
+//
+//-------------------------------------------------------------------------------
+void
 AddrSpace::deleteStackPages(int thread_id){
 	int r = stackArrays[thread_id]; //the first page of the stack for a thread
 	int stackSize = divRoundUp(UserStackSize,PageSize);
 	phyMemBMLock->Acquire();
 	for(int i = r; i != r+stackSize; ++i)
 	{
-		phyMemPage->Clear(i); //clear physical memory page.
+		int phyMemPage = pageTable[i].physicalPage; //get the physical memory page
+		phyMemBM->Clear(phyMemPage); //clear physical memory page.
 	}
 	phyMemBMLock->Release();
 }
