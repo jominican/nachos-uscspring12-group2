@@ -639,7 +639,8 @@ void Run_KernelProcess(int space)
 // The implementation of the Exec() system call.
 // In fact, we just return 0 when Exec() succeed, and -1 when fail.
 typedef int SpaceId;
-SpaceId Exec_Syscall(unsigned int vaddr, int len)
+//SpaceId 
+void Exec_Syscall(unsigned int vaddr, int len)
 {
 	// Kernel buffer to load the name of the executable file.
 	char* buf = new char[len+1];
@@ -647,7 +648,8 @@ SpaceId Exec_Syscall(unsigned int vaddr, int len)
 	// Check for the allocation of the kernel buffer.	
 	if(!buf){
 		printf("%s", "Can't allocate kernel buffer in Exec.\n");
-		return -1;
+		//return -1;
+		return;
 	}
 	
 	buf[len] = '\0';
@@ -655,16 +657,17 @@ SpaceId Exec_Syscall(unsigned int vaddr, int len)
 	if(-1 == copyin(vaddr, len, buf)){
 		printf("%s","Bad pointer passed to Exec.\n");
 		delete[] buf;
-		return -1;
+		//return -1;
+		return;
 	}
 	
 	// Open the executable file (user program).
-	printf("buffer %s\n", buf);
 	OpenFile* executable = fileSystem->Open(buf);
 	if(NULL == executable){
 		printf("Unable to open file %s.\n", buf);
 		delete[] buf;
-		return -1;
+		//return -1;
+		return;
 	}
 	
 	// Load the executable file into physical memory.
@@ -681,26 +684,30 @@ SpaceId Exec_Syscall(unsigned int vaddr, int len)
 		delete[] buf;
 		delete executable;
 		lockForProcess->Release();
-		return -1;
+		//return -1;
+		return;
 	}
 	
 	// Fork a new kernel thread to take the place of the user program.
-	Thread* thread = new Thread("thread");
+	Thread* thread = new Thread("User program");
 	thread->space = space;
 	thread->threadID = 0;	// first thread for the user program.
 	thread->processID = process[processID++].processID;
-	thread->Fork(Run_KernelProcess, (int)(thread->space));
 	DEBUG('t', "The information of the user program is space: %d, threadID: %d, processID: %d.\n", 
 			thread->space, thread->threadID, thread->processID);
+	delete[] buf;
+	delete executable;
+	lockForProcess->Release();
+	
+	// Last statement in a function.
+	thread->Fork(Run_KernelProcess, (int)(thread->space));
 	// Why cannot use the following method?
 	//thread->space->InitRegisters();		// set the initial register values
     //thread->space->RestoreState();		// load page table register
 	//machine->Run();			// jump to the user progam
-	delete[] buf;
-	delete executable;
-	lockForProcess->Release();
 	// Execute user program successed.
-	return 0;
+	//return 0;
+	return;
 }
 
 void Run_KernelThread(int addr)
@@ -718,7 +725,8 @@ void Run_KernelThread(int addr)
 }
 
 // The implementation of the Fork() system call.
-int Fork_Syscall(unsigned int vaddr)
+//int 
+void Fork_Syscall(unsigned int vaddr)
 {
 	//lockForThread->Acquire();
 	lockForProcess->Acquire();
@@ -728,11 +736,11 @@ int Fork_Syscall(unsigned int vaddr)
 		printf("Invalid virtual address.\n");
 		//lockForThread->Release();
 		lockForProcess->Release();
-		return -1;
+		//return -1;
+		return;
 	}
 	
 	Thread* thread = new Thread("Thread");
-	
 	thread->space = currentThread->space;
 	thread->threadID = process[currentThread->processID].totalThread;
 	thread->processID = currentThread->processID;
@@ -748,11 +756,13 @@ int Fork_Syscall(unsigned int vaddr)
 	addr->space = thread->space;
 	addr->vaddr = vaddr;
 	addr->nvaddr = nvaddr;
-	thread->Fork(Run_KernelThread, (int)addr);	
-	
 	//lockForThread->Release();
 	lockForProcess->Release();
-	return 0;
+	
+	thread->Fork(Run_KernelThread, (int)addr);	
+	
+	//return 0;
+	return;
 }
 
 int activeThreadNum()
@@ -777,10 +787,13 @@ void Exit_Syscall(int status)
 	//--process[currentThread->processID]->totalThread;
 	--process[currentThread->processID].activeThread;
 	
+	DEBUG('t', "Call Exit().\n");
+	
 	if(process[currentThread->processID].activeThread != 0){		// not the last thread for neither of the situations.
 		// Need to deallocated the 8 pages stack?	
 		lockForProcess->Release();
 		currentThread->Finish();
+		return;
 	}else{		// the last thread for the current user program.
 		// When end a user program, we should deallocated all of the 
 		// resources it holds, such as the Locks and CVs.
@@ -819,6 +832,7 @@ void Exit_Syscall(int status)
 		if(activeThreadNum() != 0){	// not the last thread for all of the user programs.
 			lockForProcess->Release();
 			currentThread->Finish();
+			return;
 		}
 	}
 	
@@ -922,12 +936,12 @@ void ExceptionHandler(ExceptionType which) {
 			break;
 		case SC_Exec:
 			DEBUG('a', "Exec syscall.\n");
-			rv = Exec_Syscall(machine->ReadRegister(4),
+			Exec_Syscall(machine->ReadRegister(4),
 							  machine->ReadRegister(5));
 			break;
 		case SC_Fork:
 			DEBUG('a', "Fork syscall.\n");
-			rv = Fork_Syscall(machine->ReadRegister(4));
+			Fork_Syscall(machine->ReadRegister(4));
 			break;
 		case SC_Yield:
 			DEBUG('a', "Yield syscall.\n");
