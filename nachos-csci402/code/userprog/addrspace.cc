@@ -154,7 +154,7 @@ AddrSpace::AddrSpace(OpenFile *executable) : fileTable(MaxOpenFiles) {
 					numPages, size);
 	// first, set up the translation 
     pageTable = new TranslationEntry[numPages + stackSize*Max_Threads];
-	stackArrays = new int[numPages + stackSize*Max_Threads];	// the total pages for a user program.
+	stackArrays = new int[Max_Threads];	// the total pages for a user program.
 	virToPhy = new int[numPages + stackSize*Max_Threads];
 	
 	// The thread id for the first thread, only the first thread of the "so called process" will call this constructor
@@ -180,13 +180,14 @@ AddrSpace::AddrSpace(OpenFile *executable) : fileTable(MaxOpenFiles) {
 		pageTable[i].readOnly = FALSE;  // if the code segment was entirely on 
 						// a separate page, we could set its 
 						// pages to be read-only
-		if(i >= (numPages - stackSize)){
-			stackArrays[i] = currentThreadID;
-		}else{
-			stackArrays[i] = -1;
-		}
+		//if(i >= (numPages - stackSize)){
+		//	stackArrays[i] = currentThreadID;
+		//}else{
+		//	stackArrays[i] = -1;
+		//}
 		executable->ReadAt(&(machine->mainMemory[phyMemPage*PageSize]), PageSize, i*PageSize+noffH.code.inFileAddr);
     }
+	stackArrays[currentThreadID] = divRoundUp(size, PageSize); //the beginning stack page for the first page
     
 	/*
 // zero out the entire address space, to zero the unitialized data segment 
@@ -270,7 +271,7 @@ AddrSpace::AllocateStackPages(int threadID)
 	}
 	int stackSize = divRoundUp(UserStackSize,PageSize); 
 	
-	int stackEndIndex = numPages + stackSize*threadID; //the end index of the stack for this thread
+	int stackEndIndex = numPages + stackSize; //the end index of the stack for this thread
 	for(int i = numPages; i < stackEndIndex; ++i){
 		phyMemBMLock->Acquire();
 		int phyMemPage = phyMemBM->Find(); //Find an available physical memory page.
@@ -293,11 +294,23 @@ AddrSpace::AllocateStackPages(int threadID)
 						// a separate page, we could set its 
 						// pages to be read-only
               
-		stackArrays[i] = threadID; //To indicate that this virtual memory page stores the stack of the thead whose id is "threadID"
 	}
+	stackArrays[threadID] = numPages; //To indicate that the beginning virtual memory page stores the stack of the thead whose id is "threadID"
 	numPages = stackEndIndex;//update the numPages.
 	
 	return (numPages*PageSize-16);
+}
+
+int
+AddrSpace::deleteStackPages(int thread_id){
+	int r = stackArrays[thread_id]; //the first page of the stack for a thread
+	int stackSize = divRoundUp(UserStackSize,PageSize);
+	phyMemBMLock->Acquire();
+	for(int i = r; i != r+stackSize; ++i)
+	{
+		phyMemPage->Clear(i); //clear physical memory page.
+	}
+	phyMemBMLock->Release();
 }
 
 //----------------------------------------------------------------------

@@ -268,20 +268,20 @@ Condition::Wait(Lock* conditionLock)
 //	4: no more waiting threads
 //----------------------------------------------------------------------
 
-void 
+int 
 Condition::Signal(Lock* conditionLock) 
 { 
 	IntStatus old = interrupt->SetLevel(IntOff); 	// disable interrupt
 
 	if(queue->IsEmpty()){ 	// no threads are in the waiting queue
 		(void)interrupt->SetLevel(old);
-		return;
+		return 0;
 	}
 
 	if(waitingLock != conditionLock){ 	// invalid condition lock
 		fprintf(stderr, "Error: A Condition Variable should be binded to the same Lock object!\n");
 		(void)interrupt->SetLevel(old);
-		return;
+		return 0;
 	}
 
 	Thread* thread = (Thread*)queue->Remove(); 	// 	wakeup one waiting thread
@@ -290,6 +290,7 @@ Condition::Signal(Lock* conditionLock)
 	if(queue->IsEmpty()) waitingLock = NULL; 	// no more waiting threads
  	
 	(void)interrupt->SetLevel(old); 	// restore interrupt
+	return 1;
 }
 
 //----------------------------------------------------------------------
@@ -297,8 +298,12 @@ Condition::Signal(Lock* conditionLock)
 //	Broadcast operation in a Condition Variable object.
 //----------------------------------------------------------------------
 
-void 
+int 
 Condition::Broadcast(Lock* conditionLock) 
 { 
-	while(!queue->IsEmpty()) Signal(conditionLock); 	// 	invoke the Signal operation
+	int r = 0; //the num of the threads that have been signaled. 
+	while(!queue->IsEmpty()){ 
+		r += Signal(conditionLock);
+	}	// 	invoke the Signal operation
+	return r;
 }

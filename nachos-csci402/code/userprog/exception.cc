@@ -324,7 +324,7 @@ int CreateLock_Syscall(unsigned int vaddr, int len)
 	kernelLock[index]->lock = lock;
 	kernelLock[index]->addrSpace = currentThread->space;
 	kernelLock[index]->isDeleted = false;
-	kernelLock[index]->isToBeDeleted = false;
+	kernelLock[index]->isToBeDeleted = true;
 	lockForLock->Release();
 	
 	// Return the position (the index) of the kernel Lock.
@@ -409,7 +409,7 @@ int CreateCondition_Syscall(unsigned int vaddr, int len)
 	kernelCV[index]->cv = cv;
 	kernelCV[index]->addrSpace = currentThread->space;
 	kernelCV[index]->isDeleted = false;
-	kernelCV[index]->isToBeDeleted = false;
+	kernelCV[index]->isToBeDeleted = true;
 	lockForCV->Release();
 	
 	// Return the position (the index) of the kernel CV.
@@ -568,7 +568,10 @@ int Wait_Syscall(int lockId, int conditionId){
 	lockForCV->Release();
 	
 	DEBUG('t', "Wait on Condition %d with Lock %d\n", conditionId, lockId);
-		
+	
+	lockForProcess->Acquire();
+	--process[currentThread->processID].activeThread;
+	lockForProcess->Release();
     kernelCV[conditionId]->cv->Wait(kernelLock[lockId]->lock);
 	return 0;
 }
@@ -593,9 +596,12 @@ int Signal_Syscall(int lockId, int conditionId){
 	}
 	
 	DEBUG('t', "Signal Condition %d with Lock %d\n", conditionId, lockId);
-	
-	kernelCV[conditionId]->cv->Signal(kernelLock[lockId]->lock); //call function:Signal
 	lockForCV->Release();
+	int r = kernelCV[conditionId]->cv->Signal(kernelLock[lockId]->lock); //call function:Signal
+	lockForProcess->Acquire();
+	process[currentThread->processID].activeThread += r;
+	lockForProcess->Release();
+	
 	return 0;
 	
 }
@@ -618,11 +624,13 @@ int BroadCast_Syscall(int lockId, int conditionId){
 		lockForCV->Release();
 		return -2;
 	}
-	
-	DEBUG('t', "BroadCast Condition %d with Lock %d\n", conditionId, lockId);
-	
-	kernelCV[conditionId]->cv->Broadcast(kernelLock[lockId]->lock); //call function: broadCast.
 	lockForCV->Release();
+	DEBUG('t', "BroadCast Condition %d with Lock %d\n", conditionId, lockId);
+	int r = 0;
+	r += kernelCV[conditionId]->cv->Broadcast(kernelLock[lockId]->lock); //call function: broadCast.
+	lockForProcess->Acquire();
+	process[currentThread->processID].activeThread += r;
+	lockForProcess->Release();
 	return 0;
 }
 
@@ -774,6 +782,7 @@ int activeThreadNum()
 	return sum;
 }
 
+
 // The implementation of the Exit() system call.
 void Exit_Syscall(int status)
 {
@@ -790,7 +799,8 @@ void Exit_Syscall(int status)
 	DEBUG('t', "Call Exit().\n");
 	
 	if(process[currentThread->processID].activeThread != 0){		// not the last thread for neither of the situations.
-		// Need to deallocated the 8 pages stack?	
+		// Need to deallocated the 8 pages stack?
+    	currentThread->space->deleteStackPages(currentThread->threadID);//delete the memory stackPages of the current thread.	
 		lockForProcess->Release();
 		currentThread->Finish();
 		return;
