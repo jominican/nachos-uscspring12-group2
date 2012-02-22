@@ -31,7 +31,7 @@ CPP = $(GCCDIR)cpp
 INCDIR =-I../userprog -I../threads
 CFLAGS = -G 0 -c $(INCDIR)
 
-all: halt matmult sort testfiles acquirelock releaselock wait signal broadcast createlock createcondition destroylock destroycondition exec test_ExecFile
+all: halt matmult sort testfiles acquirelock releaselock wait signal broadcast createlock createcondition destroylock destroycondition exec execfile
 
 start.o: start.s ../userprog/syscall.h
 	$(CPP) $(CPPFLAGS) start.s > strt.s
@@ -122,11 +122,11 @@ exec: exec.o start.o
 	$(LD) $(LDFLAGS) start.o exec.o -o exec.coff
 	../bin/coff2noff exec.coff exec
 
-test_ExecFile.o: test_ExecFile.c
-	$(CC) $(CFLAGS) -c test_ExecFile.c
-test_ExecFile: test_ExecFile.o start.o
-	$(LD) $(LDFLAGS) start.o test_ExecFile.o -o test_ExecFile.coff
-	../bin/coff2noff test_ExecFile.coff test_ExecFile
+execfile.o: execfile.c
+	$(CC) $(CFLAGS) -c execfile.c
+execfile: execfile.o start.o
+	$(LD) $(LDFLAGS) start.o execfile.o -o execfile.coff
+	../bin/coff2noff execfile.coff execfile
 
 clean:
 	rm -f *.o *.coff

@@ -1,24 +1,25 @@
 #include "syscall.h"
 #include "print.h"
 
-/*Test Create Condition*/
+/*
+Test CreateCondition_Syscall
+*/
 
 int cvID;
 int cvRV;
 
 int main()
 {
-	
-	print("Test Create CV\n");
+	print("Test CreateCondition() system call.\n");
 	
 	cvID = CreateCondition("cv1", 3);
 	if (cvID == -1) {
-		print("Fail to create a cv.\n");
+		print(" ->Fail to create a cv.\n");
 	}else {
-		print("Create cv %d.\n", cvID);
+		print(" ->Create cv %d.\n", cvID);
 		
 		cvRV = DestroyCondition(cvID);
-		print("DestroyLock cv %d.\n", cvID);
+		print(" ->DestroyCondition cv %d.\n", cvID);
 	}
 	return 0;
 }
