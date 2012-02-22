@@ -14,6 +14,7 @@ int main(){
 		print("Try to invoke Exec().\n");
 		Exec("../test/test_ExecFile", sizeof("../test/test_ExecFile"));
 	}
+	/*Exit(0);*/
 	/*
 	for(; j < 100; ++j)
 		Yield();
