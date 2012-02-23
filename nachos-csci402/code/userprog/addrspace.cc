@@ -266,7 +266,7 @@ AddrSpace::InitRegisters()
 int
 AddrSpace::AllocateStackPages(int threadID)
 {
-	if(threadID <= 0){
+	if(threadID < 0){
 		printf("Error in the 'threadID' when allocating stack for the thread.\n");
 		return -1;
 	}
@@ -309,7 +309,7 @@ AddrSpace::AllocateStackPages(int threadID)
 //
 //-------------------------------------------------------------------------------
 void
-AddrSpace::deleteStackPages(int thread_id, int process_id){
+AddrSpace::deleteStackPages(int thread_id){
 	int r = stackArrays[thread_id]; //the first page of the stack for a thread
 	int stackSize = divRoundUp(UserStackSize,PageSize);
 	phyMemBMLock->Acquire();
