@@ -187,7 +187,8 @@ AddrSpace::AddrSpace(OpenFile *executable) : fileTable(MaxOpenFiles) {
 		//}
 		executable->ReadAt(&(machine->mainMemory[phyMemPage*PageSize]), PageSize, i*PageSize+noffH.code.inFileAddr);
     }
-	stackArrays[currentThreadID] = divRoundUp(size, PageSize); //the beginning stack page for the first page
+	stackArrays[currentThreadID] = numPages - stackSize; //the beginning stack page for the first page
+	//printf("start index of thread %d is %d", currentThreadID, numPages - stackSize);
     
 	/*
 // zero out the entire address space, to zero the unitialized data segment 
@@ -284,7 +285,7 @@ AddrSpace::AllocateStackPages(int threadID)
 		else{
 			virToPhy[i] = phyMemPage;
 		}
-		
+		//printf("PageTable [%d].\n", i);
 		pageTable[i].virtualPage = i;
 		pageTable[i].physicalPage = phyMemPage;	//Allocate the physical mem page to one page of the stack.
 		pageTable[i].valid = TRUE;
@@ -295,9 +296,10 @@ AddrSpace::AllocateStackPages(int threadID)
 						// pages to be read-only
               
 	}
+	//printf("start index of thread %d is %d", threadID, numPages);
 	stackArrays[threadID] = numPages; //To indicate that the beginning virtual memory page stores the stack of the thead whose id is "threadID"
 	numPages = stackEndIndex;//update the numPages.
-	
+	//printf("The stackEndIndex is: %d.\n", numPages);
 	return (numPages*PageSize-16);
 }
 
@@ -307,15 +309,19 @@ AddrSpace::AllocateStackPages(int threadID)
 //
 //-------------------------------------------------------------------------------
 void
-AddrSpace::deleteStackPages(int thread_id){
+AddrSpace::deleteStackPages(int thread_id, int process_id){
 	int r = stackArrays[thread_id]; //the first page of the stack for a thread
 	int stackSize = divRoundUp(UserStackSize,PageSize);
 	phyMemBMLock->Acquire();
+	//printf("Before deleting stack pages for process %d; thread %d start Page %d.\n", process_id, thread_id,r);
 	for(int i = r; i != r+stackSize; ++i)
 	{
+		//printf("%d.\n",i);
 		int phyMemPage = pageTable[i].physicalPage; //get the physical memory page
+		//printf("%d +++++.\n",i);
 		phyMemBM->Clear(phyMemPage); //clear physical memory page.
 	}
+	//printf("After deleting stack pages of thread %d.\n", thread_id);
 	phyMemBMLock->Release();
 }
 
