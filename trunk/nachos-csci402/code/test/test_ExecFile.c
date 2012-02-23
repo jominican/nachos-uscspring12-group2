@@ -16,7 +16,7 @@ int
 test_Exec(){
 	int i = 0;
 	print("Successfully Created user program.\n");
-	for(; i < 50; ++i){
+	for(; i < 2; ++i){
 		print("Try to invoke Fork().\n");
 		Fork(test_Fork);
 	}

@@ -19,6 +19,20 @@ void T1(){
 	
 	Release(lockId);
 	print(" ->Thread 1 release lock %d.\n", lockId);
+	Exit(0);
+}
+
+void T3(){
+	
+	Acquire(lockId);
+	print(" ->Thread 3 acquire lock %d.\n", lockId);
+	
+	Wait(lockId, cvId);
+	print(" ->Thread 3 wait on Condition %d with Lock %d.\n", cvId, lockId);
+	
+	Release(lockId);
+	print(" ->Thread 3 release lock %d.\n", lockId);
+	Exit(0);
 }
 
 void T2(){
@@ -46,6 +60,7 @@ void T2(){
 		DestroyCondition(cvId);
 		DestroyLock(lockId);
 	}
+	Exit(0);
 }
 
 int main()
@@ -55,7 +70,9 @@ int main()
 	lockId = CreateLock("abc",3);
 	cvId = CreateCondition("abc",3);
 	
-	T1();
-	T2();
+	Fork(T1);
+	Fork(T3);
+	Fork(T2);
+	Exit(0);
 	return 0;
 }
