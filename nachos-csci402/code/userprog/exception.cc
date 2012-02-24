@@ -804,7 +804,7 @@ void Exit_Syscall(int status)
 	
 	if(process[currentThread->processID].activeThread != 0){		// not the last thread for neither of the situations.
 		// Need to deallocated the 8 pages stack
-    	currentThread->space->deleteStackPages(currentThread->threadID, currentThread->processID);//delete the memory stackPages of the current thread.	
+    	currentThread->space->deleteStackPages(currentThread->threadID);//delete the memory stackPages of the current thread.	
 		lockForProcess->Release();
 		currentThread->Finish();
 		return;
