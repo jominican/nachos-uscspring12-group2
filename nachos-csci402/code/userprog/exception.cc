@@ -562,7 +562,7 @@ int Wait_Syscall(int lockId, int conditionId){
 	
 	DEBUG('t', "Check if Condition %d is validated\n", conditionId);
 	
-	if(detect_Lock(lockId, conditionId) == -1){ //detect data validation
+	if(detect_CV(lockId, conditionId) == -1){ //detect data validation
 		lockForCV->Release();
 		return -2;
 	}
@@ -587,11 +587,12 @@ int Signal_Syscall(int lockId, int conditionId){
 		lockForLock->Release();
 		return -1;
 	}
+	lockForLock->Release();
 	lockForCV->Acquire();
 	
 	DEBUG('t', "Check if Condition %d is validate\n", conditionId);
 	
-	if(detect_Lock(lockId, conditionId) == -1){ //detect data validation
+	if(detect_CV(lockId, conditionId) == -1){ //detect data validation
 		lockForCV->Release();
 		return -2;
 	}
@@ -617,11 +618,13 @@ int BroadCast_Syscall(int lockId, int conditionId){
 		lockForLock->Release();
 		return -1;
 	}
+	lockForLock->Release();
+	
 	lockForCV->Acquire();
 	
 	DEBUG('t', "Check if Condition %d is validate\n", conditionId);
 	
-	if(detect_Lock(lockId, conditionId) == -1){ //detect data validation
+	if(detect_CV(lockId, conditionId) == -1){ //detect data validation
 		lockForCV->Release();
 		return -2;
 	}
@@ -846,7 +849,6 @@ void Exit_Syscall(int status)
 			return;
 		}
 	}
-	
 	// The last thread for all of the user programs.
 	if(0 == activeThreadNum()){
 		lockForProcess->Release();
