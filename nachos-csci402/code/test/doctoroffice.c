@@ -1702,3 +1702,10 @@ int main(void)
 	
 	Exit(0);
 }
+
+#undef memcpy
+void *
+memcpy (void *to, const void *from, int len)
+{
+	return 0;
+}
