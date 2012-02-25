@@ -10,7 +10,7 @@ int main()
 {	
 	int i = 0;
 	print("Test Wait() system call.\n");	
-	Exec("../test/wait1", sizeof("../test/wait1"));
+	Exec("../test/wait1", sizeof("../test/wait1"));  /*Execute a user program*/
 	for(; i != 100; ++i);
 		Yield();
 	

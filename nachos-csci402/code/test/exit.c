@@ -11,7 +11,7 @@ int main(void)
 	int i = 0;
 	print("Test Exit system call.\n");
 	for(; i != 2; ++i)
-		Exec("../test/test_exit1",sizeof("../test/test_exit1"));
+		Exec("../test/test_exit1",sizeof("../test/test_exit1")); /*execute a user program*/
 	for(; i !=100; ++i)
 		Yield();
 }
