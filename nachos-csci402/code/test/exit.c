@@ -1,5 +1,8 @@
 #include "syscall.h"
 #include "print.h"
+/*
+Test system call Exit()
+*/
 
 int processId = 0;
 
