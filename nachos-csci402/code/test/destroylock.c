@@ -21,6 +21,9 @@ int main()
 	Release(lockID);
 	print(" ->Release lock %d.\n", lockID);
 	
+	print(" ->Test situation destroy an invalid lock id %d.\n", lockID+1);
+	DestroyLock(lockID+1);
+	print(" ->Test situation destroy a valid lock id %d.\n");
 	rv = DestroyLock(lockID);
 	if (rv == -1) {
 		print(" ->Fail to destroy a lock.\n");
