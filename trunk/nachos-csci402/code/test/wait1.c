@@ -11,17 +11,17 @@ int result;
 
 void T1()
 {	
-	int invalidLockId = lockId + 1;
-	int invalidCVId = cvId +1;
+	int invalidLockId = lockId + 1; /* the invalid lock id*/
+	int invalidCVId = cvId +1; /* the invalid cv id*/
 	Acquire(lockId);
 	print(" ->Thread 1 acquire lock %d.\n", lockId);
 	print(" ->Test situation the thread wait on a invalid lock id %d.\n", invalidLockId);
-	Wait(invalidLockId, invalidCVId);
+	Wait(invalidLockId, invalidCVId);  /*wait on a invalid lock id*/
 	print(" ->Test situation the thread wait on a invalid CV id %d.\n", invalidCVId);
-	Wait(lockId, invalidCVId);
+	Wait(lockId, invalidCVId); /*wait on a invalid cv id*/
 	
 	print(" ->Test situation the thread wait on a valid lock id %d and CV id %d.\n", lockId, cvId);
-	result = Wait(lockId, cvId);
+	result = Wait(lockId, cvId); /*goes to wait*/
 	if (result == -1) {
 		print(" ->Lock %d is not validated. Thread 1 fail to wait.\n", lockId);
 		Release(lockId);
@@ -42,7 +42,7 @@ void T2(){
 	
 	Acquire(lockId);
 	print(" ->Thread 2 acquire lock %d.\n", lockId);
-	result = Signal(lockId, cvId);
+	result = Signal(lockId, cvId); /*do signal*/
 	if (result == -1) {
 		print(" ->Thread 1 fail in waiting on Condition %d with Lock %d.\n", cvId, lockId);
 		Release(lockId);
@@ -52,7 +52,7 @@ void T2(){
 		Release(lockId);
 		print(" ->Thread 2 release lock %d.\n", lockId);
 	}else {
-		Signal(lockId, cvId);
+		Signal(lockId, cvId);/*do signal again. test that this won't abort the program*/
 		print(" ->Thread 2 signal Thread 1 on Condition %d with Lock %d.\n", cvId, lockId);
 		Release(lockId);
 		print(" ->Thread 2 release lock %d.\n", lockId);

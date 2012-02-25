@@ -12,7 +12,7 @@ int T_1()
 {
 	Acquire(lockId);
 	print("T_1 goes to wait.\n");
-	Wait(lockId,cvId);
+	Wait(lockId,cvId); /*goes to wait*/
 	Release(lockId);
 	print("T_1 plans to call Exit.\n");
 	Exit(0);
@@ -22,7 +22,7 @@ int T_2()
 {
 	Acquire(lockId);
 	print("T_2 goes to wait.\n");
-	Wait(lockId,cvId);
+	Wait(lockId,cvId); /*goes to wait*/
 	Release(lockId);
 	print("T_2 plans to call Exit.\n");
 	Exit(0);
@@ -44,7 +44,7 @@ int T_4()
 {
 	Acquire(lockId);
 	print("T_4 goes to signal.\n");
-	Signal(lockId,cvId);
+	Signal(lockId,cvId); /*only one siganl in this user program*/
 	Release(lockId);
 	print("T_4 plans to call Exit.\n");
 	
@@ -58,13 +58,13 @@ int T_4()
 int main()
 {
 	int i = 0;
-	lockId = CreateLock("lock", sizeof("lock"));
-	cvId = CreateCondition("CV", sizeof("CV"));
+	lockId = CreateLock("lock", sizeof("lock")); 
+	cvId = CreateCondition("CV", sizeof("CV")); 
 	
 	Fork(T_1);
 	Fork(T_2);
 	Fork(T_3);
-	Fork(T_4);
+	Fork(T_4); /*fork 4 threads*/
 	for(; i != 100; ++i)
 		Yield();
 	print("main plans to call Exit.\n");

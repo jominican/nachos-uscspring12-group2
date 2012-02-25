@@ -60,16 +60,16 @@ int T_2(){
 int main(void)
 {
 	int i = 0;
-	lockid_1 = CreateLock("lock1", sizeof("lock1"));
+	lockid_1 = CreateLock("lock1", sizeof("lock1")); 
 	lockid_2 = CreateLock("lock2", sizeof("lock2"));
 	cvid_1 = CreateCondition("CV_1", sizeof("CV_1"));
-	cvid_2 = CreateCondition("CV_2", sizeof("CV_2"));
+	cvid_2 = CreateCondition("CV_2", sizeof("CV_2")); /*create locks and CVs*/
 	print("Successfully created one lock and two condition variables.\n");
 	
 	print("Fork T_1.\n");
 	Fork(T_1);
 	print("Fork T_2.\n");
-	Fork(T_2);
+	Fork(T_2); /*Fork two threads*/
 	for(; i < 100; ++i)
 		Yield();
 	Exit(0);
