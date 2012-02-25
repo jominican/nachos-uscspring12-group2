@@ -38,7 +38,7 @@ int main()
 	}
 	
 	/*Test3: acquire a lock that is not created yet.*/
-	lock1 = 100;
+	result = Acquire(lock1);
 	if (result == 0) {
 		print(" ->Test3: try to acquire lock %d that is not created yet and succeed.\n", lock1);
 		Release(lock1);
@@ -46,6 +46,6 @@ int main()
 	}else {
 		print(" ->Test3: try to acquire lock %d that is not created yet and fail.\n", lock1);
 	}	
-	DestroyLock(lock);
+	/*DestroyLock(lock);*/
 	return 0;
 }
