@@ -31,7 +31,7 @@ CPP = $(GCCDIR)cpp
 INCDIR =-I../userprog -I../threads
 CFLAGS = -G 0 -c $(INCDIR)
 
-all: halt matmult sort testfiles acquirelock releaselock wait signal broadcast createlock createcondition destroylock destroycondition exec execfile
+all: halt matmult sort testfiles acquirelock releaselock wait wait1 signal signal1 broadcast broadcast1 createlock createcondition destroylock destroycondition exec testcv test_Exec test_ExecFile testcv1 exit test_exit1 
 
 start.o: start.s ../userprog/syscall.h
 	$(CPP) $(CPPFLAGS) start.s > strt.s
@@ -80,17 +80,35 @@ wait: wait.o start.o
 	$(LD) $(LDFLAGS) start.o wait.o -o wait.coff
 	../bin/coff2noff wait.coff wait
 
+wait1.o: wait1.c
+	$(CC) $(CFLAGS) -c wait1.c
+wait1: wait1.o start.o
+	$(LD) $(LDFLAGS) start.o wait1.o -o wait1.coff
+	../bin/coff2noff wait1.coff wait1
+
 signal.o: signal.c
 	$(CC) $(CFLAGS) -c signal.c
 signal: signal.o start.o
 	$(LD) $(LDFLAGS) start.o signal.o -o signal.coff
 	../bin/coff2noff signal.coff signal
 
+signal1.o: signal1.c
+	$(CC) $(CFLAGS) -c signal1.c
+signal1: signal1.o start.o
+	$(LD) $(LDFLAGS) start.o signal1.o -o signal1.coff
+	../bin/coff2noff signal1.coff signal1
+
 broadcast.o: broadcast.c
 	$(CC) $(CFLAGS) -c broadcast.c
 broadcast: broadcast.o start.o
 	$(LD) $(LDFLAGS) start.o broadcast.o -o broadcast.coff
 	../bin/coff2noff broadcast.coff broadcast
+	
+broadcast1.o: broadcast1.c
+	$(CC) $(CFLAGS) -c broadcast1.c
+broadcast1: broadcast1.o start.o
+	$(LD) $(LDFLAGS) start.o broadcast1.o -o broadcast1.coff
+	../bin/coff2noff broadcast1.coff broadcast1
 
 createlock.o: createlock.c
 	$(CC) $(CFLAGS) -c createlock.c
@@ -122,11 +140,42 @@ exec: exec.o start.o
 	$(LD) $(LDFLAGS) start.o exec.o -o exec.coff
 	../bin/coff2noff exec.coff exec
 
-execfile.o: execfile.c
-	$(CC) $(CFLAGS) -c execfile.c
-execfile: execfile.o start.o
-	$(LD) $(LDFLAGS) start.o execfile.o -o execfile.coff
-	../bin/coff2noff execfile.coff execfile
+testcv.o: testcv.c
+	$(CC) $(CFLAGS) -c testcv.c
+testcv: testcv.o start.o
+	$(LD) $(LDFLAGS) start.o testcv.o -o testcv.coff
+	../bin/coff2noff testcv.coff testcv
+	
+testcv1.o: testcv1.c
+	$(CC) $(CFLAGS) -c testcv1.c
+testcv1: testcv1.o start.o
+	$(LD) $(LDFLAGS) start.o testcv1.o -o testcv1.coff
+	../bin/coff2noff testcv1.coff testcv1
+	
+test_ExecFile.o: test_ExecFile.c
+	$(CC) $(CFLAGS) -c test_ExecFile.c
+test_ExecFile: test_ExecFile.o start.o
+	$(LD) $(LDFLAGS) start.o test_ExecFile.o -o test_ExecFile.coff
+	../bin/coff2noff test_ExecFile.coff test_ExecFile
+	
+test_Exec.o: test_Exec.c
+	$(CC) $(CFLAGS) -c test_Exec.c
+test_Exec: test_Exec.o start.o
+	$(LD) $(LDFLAGS) start.o test_Exec.o -o test_Exec.coff
+	../bin/coff2noff test_Exec.coff test_Exec
+	
+exit.o: exit.c
+	$(CC) $(CFLAGS) -c exit.c
+exit: exit.o start.o
+	$(LD) $(LDFLAGS) start.o exit.o -o exit.coff
+	../bin/coff2noff exit.coff exit
+	
+test_exit1.o: test_exit1.c
+	$(CC) $(CFLAGS) -c test_exit1.c
+test_exit1: test_exit1.o start.o
+	$(LD) $(LDFLAGS) start.o test_exit1.o -o test_exit1.coff
+	../bin/coff2noff test_exit1.coff test_exit1
+
 
 clean:
 	rm -f *.o *.coff
