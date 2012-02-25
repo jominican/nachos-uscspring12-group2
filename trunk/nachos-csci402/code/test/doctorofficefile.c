@@ -154,6 +154,8 @@ int parentWaitChildCV[MAX_PATIENT];
 /* Examination Sheets for each entity. */
 int examSheetIndex = -1; /* for wrnExamSheet. */
 ExamSheet wrnExamSheet[MAX_PATIENT];		/* the Waiting Room Nurse makes a new exam sheet for a new Patient. */
+ExamSheet* mapExamSheet;
+ExamSheet* wrnToNurseExamSheet;
 ExamSheet* nurseExamSheet[MAX_NURSE];
 ExamSheet* examSheetArray[MAX_PATIENT]; /* the Exam Sheet binded with different Exam Rooms. */
 ExamSheet* examRoomExamSheet[MAX_EXAM];	/* the current Examination Sheet from the Patient in Doctor(). */
@@ -188,7 +190,7 @@ int indexChild = 0;
 
 /* Self-defined rand(). */
 int seed = 999;
-int rand()
+int rand(void)
 {
 	return (++seed) % 100;
 }
@@ -275,7 +277,7 @@ void* memcpy (void* to, const void* from, int len)
  *	Monitor Variables.
  *	Entity State.
  */
-void Init()
+void Init(void)
 {
 	int i = 0;
 	
@@ -393,7 +395,7 @@ void Init()
 }
 
 /* Doctor */
-void Doctor()
+void Doctor(void)
 {
 	int i = 0, roomIndex = -1, result = -1, images = -1;
 	int index = indexDoctor;
@@ -454,7 +456,7 @@ void Doctor()
 }
 
 /* Nurse */
-void Nurse()
+void Nurse(void)
 {
 	int i = 0;
 	int loopTime = 0;
@@ -495,7 +497,7 @@ void Nurse()
 			nurseWaitWrnCount--;
 			if(nextActionForNurse == 1)    /*when the nurse is informed by the WRN to go to take a patient in the waiting room. */
 			{
-				patientExamSheet = (ExamSheet*)(&wrnExamSheet);
+				patientExamSheet = wrnToNurseExamSheet;
 				Release(nurseWrnLock);
 				Acquire(patientWaitNurseLock);   /*Nurse acquires the lock to escort patient. */
 				nurseWaitPatientCount++;
@@ -717,7 +719,7 @@ void Nurse()
 }
 
 /* WaitingRoomNurse */
-void WaitingRoomNurse() 
+void WaitingRoomNurse(void) 
 {
 	int i = 0;
 	int patientAge = -1;
@@ -756,10 +758,10 @@ void WaitingRoomNurse()
 				Wait(WRInteractLock, WRInteractCV);		/* wait for Patient to tell her they get the sheet. */
 			}		/* done with a Patient's getting form task. */
 			else if (WRNurseTask == W_GIVEFORM) {
-				print("Waiting Room nurse accepts the form from Adult Patient/Parent with name [%s] and age [%d].\n", wrnExamSheet[examSheetIndex].name, wrnExamSheet[examSheetIndex].age);
-				examSheetArray[indexOfSheet++] = (ExamSheet*)(&wrnExamSheet[examSheetIndex]);	/* dynamic allocation. */
-				print("Waiting Room nurse creates an examination sheet for [Adult/Child] patient with name [%s] and age [%d].\n", wrnExamSheet[examSheetIndex].name, wrnExamSheet[examSheetIndex].age);
-				print("Waiting Room nurse tells the Adult Patient/Parent [%d] to wait in the waiting room for a nurse.\n", wrnExamSheet[examSheetIndex].patientID);
+				print("Waiting Room nurse accepts the form from Adult Patient/Parent with name [%s] and age [%d].\n", mapExamSheet->name, mapExamSheet->age);
+				examSheetArray[indexOfSheet++] = mapExamSheet;
+				print("Waiting Room nurse creates an examination sheet for [Adult/Child] patient with name [%s] and age [%d].\n", mapExamSheet->name, mapExamSheet->age);
+				print("Waiting Room nurse tells the Adult Patient/Parent [%d] to wait in the waiting room for a nurse.\n", mapExamSheet->patientID);
 			}
 			Release(WRInteractLock);		
 		}
@@ -771,13 +773,13 @@ void WaitingRoomNurse()
 			if(indexOfSheet > numOfNursesPassed)
 			{
 				/* there are more registered Patients than Nurses. */
-				copyExamSheet((ExamSheet*)(&wrnExamSheet[examSheetIndex]), examSheetArray[indexOfPatient++]);
+				wrnToNurseExamSheet = examSheetArray[indexOfPatient++];
 				nurseTakeSheet_ID = nurseTakeSheetID[head++];
 				numOfNursesPassed++;
 				nextActionForNurse = 1; /* tell Nurse to go to pick up a Patient. */
 				
 				print("Nurse [%d] tells Waiting Room Nurse to give a new examination sheet.\n", nurseTakeSheet_ID);
-				print("Waiting Room nurse gives examination sheet of patient [%d] to Nurse [%d].\n", wrnExamSheet->patientID, nurseTakeSheet_ID);
+				print("Waiting Room nurse gives examination sheet of patient [%d] to Nurse [%d].\n", wrnToNurseExamSheet->patientID, nurseTakeSheet_ID);
 				Signal(nurseWrnLock, nurseWrnCV);
 				/* WRN tries to release nurseWrnLock after giving the Exam Sheet to a Nurse. */
 				Acquire(wrnWaitNurseLock);
@@ -811,7 +813,7 @@ void WaitingRoomNurse()
 }
 
 /* Cashier */
-void Cashier()
+void Cashier(void)
 {
 	int i = 0;
 	int index = indexCashier;
@@ -887,7 +889,7 @@ void Cashier()
 }
 
 /* XrayTechnician */
-void XrayTechnician()
+void XrayTechnician(void)
 {
 	int i = 0, result = -1;
 	int index = indexXT; 
@@ -971,7 +973,7 @@ void XrayTechnician()
 }
 
 /* Patient */
-void Patient() 
+void Patient(void) 
 {
 	int index = indexPatient;	
 	ExamSheet* myExamSheet;		/* the Patient declares a new Exam Sheet for himself. */
@@ -1035,7 +1037,7 @@ void Patient()
 	/* need to tell the Waiting Room Nurse what to do -- secondly turn over a form. */
 	WRNurseTask = W_GIVEFORM;
 	print("[Adult patient] submits the filled form to the Waiting Room Nurse.\n");
-	copyExamSheet((ExamSheet*)(&wrnExamSheet[examSheetIndex]), myExamSheet);
+	mapExamSheet = myExamSheet;
 	numOfPatientsPassed++;	/* one Patient passed the interaction with the Waiting Room Nurse. */
 	Signal(WRInteractLock, WRInteractCV);		/* turn over the filled form. */
 	
@@ -1263,6 +1265,7 @@ void Parent(void)
 	int examRoomSecondTime_id = -1;
 	int examRoomNurse_id = -1;
 	int xrayRoom_id = -1;
+	int tmpExamSheetIndex = -1;
 	++indexParent;
 	patient_age = rand() % 14 + 1;
 	
@@ -1292,7 +1295,7 @@ void Parent(void)
 	Signal(WRInteractLock, WRInteractCV);		/* tell the Waiting Room Nurse that he comes. */
 	Wait(WRInteractLock, WRInteractCV);		/* wait for the Waiting Room Nurse to make a new sheet. */
 	print("[Parent of child patient] gets the form from the Waiting Room Nurse.\n");
-	myExamSheet = (ExamSheet*)(&wrnExamSheet);		/* get the Exam Sheet. */
+	myExamSheet = (ExamSheet*)(&wrnExamSheet[examSheetIndex]);		/* get the Exam Sheet. */
 	Signal(WRInteractLock, WRInteractCV);		/* tell the Waiting Room Nurse that he gets the sheet. */
 	Release(WRInteractLock);
 	
@@ -1318,7 +1321,7 @@ void Parent(void)
 	/* need to tell the Waiting Room Nurse what to do -- secondly turn over a form. */
 	WRNurseTask = W_GIVEFORM;
 	print("[Parent of child patient] submits the filled form to the Waiting Room Nurse.\n");
-	copyExamSheet((ExamSheet*)(&wrnExamSheet[examSheetIndex]), myExamSheet);
+	mapExamSheet = myExamSheet;
 	numOfPatientsPassed++;	/* one Patient passed the interaction with the Waiting Room Nurse. */
 	Signal(WRInteractLock, WRInteractCV);		/* turn over the filled form. */
 	
@@ -1669,6 +1672,8 @@ int main(void)
 	numberOfChildren = numberOfParents = 30;
 	remainNurseCount = numberOfNurses;
 	remainPatientCount = numberOfPatients = numberOfAdults + numberOfChildren; 
+	indexParent = numberOfAdults;
+	indexChild = numberOfAdults;
 	
 	/* Initialize the Locks, Condition Variables, Monitor Variables */
 	/* and the initial state of each entity. */
