@@ -16,15 +16,17 @@ int
 test_Exec(){
 	int i = 0;
 	print("Successfully Created user program.\n");
-	for(; i < 2; ++i){
+	for(; i < 3; ++i){
 		print("Try to invoke Fork().\n");
 		Fork(test_Fork);
 	}
+	/*Exit(0);*/
 	return 0;
 }
 
 int main(){
 	test_Exec();
+	/*Yield();*/
 	Exit(0);
 	return 0;
 }
