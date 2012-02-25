@@ -1,6 +1,10 @@
 #include "syscall.h"
 #include "print.h"
 
+/*
+Test system call Exit()
+*/
+
 int lockId;
 int cvId;
 
