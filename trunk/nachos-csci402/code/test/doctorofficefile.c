@@ -449,7 +449,7 @@ void Doctor(void)
 		}
 		
 		/* Avoid busy waiting. */
-		for(i = 0; i < 100; ++i)
+		for(i = 0; i < 1; ++i)
 			Yield();
 	}
 	Exit(0);
@@ -552,7 +552,7 @@ void Nurse(void)
 		/* end of Task 1. */
 
 		/* Avoid busy waiting. */
-		for(loopTime = 0; loopTime != 100; ++loopTime)
+		for(loopTime = 0; loopTime != 1; ++loopTime)
 			Yield();
 			
 		/****************************************************/
@@ -624,7 +624,7 @@ void Nurse(void)
 		else{	/* no Patient is in state of FINISH. */
 		}		
 
-		for(loopTime = 0; loopTime != 100; ++loopTime)
+		for(loopTime = 0; loopTime != 1; ++loopTime)
 			Yield();
 
 		/******************************************/
@@ -677,7 +677,7 @@ void Nurse(void)
 		}
         /* end of Task 3. */		
 		
-		for(loopTime = 0; loopTime != 100; ++loopTime)
+		for(loopTime = 0; loopTime != 1; ++loopTime)
 			Yield();
 		
 		/*************************************************/
@@ -711,7 +711,7 @@ void Nurse(void)
 			Release(examRoomLockArray[loopID]);
 		}
 
-		for(loopTime = 0; loopTime != 100; ++loopTime)
+		for(loopTime = 0; loopTime != 1; ++loopTime)
 			Yield();   		
 	}
 	remainNurseCount--;
@@ -806,7 +806,7 @@ void WaitingRoomNurse(void)
 			Release(nurseWrnLock);
 		}
 		
-		for(i = 0 ; i < 100; ++i)
+		for(i = 0 ; i < 1; ++i)
 			Yield();
 	}	/*end of while */
 	Exit(0);
@@ -882,7 +882,7 @@ void Cashier(void)
 		}
 		
 		/* Avoid busy waiting. */
-		for(i = 0; i < 100; ++i)
+		for(i = 0; i < 1; ++i)
 			Yield();
 	}
 	Exit(0);
@@ -966,7 +966,7 @@ void XrayTechnician(void)
 		}
 		
 		/* Avoid busy waiting. */
-		for(i = 0; i < 100; ++i)
+		for(i = 0; i < 1; ++i)
 			Yield();
 	}
 	Exit(0);
@@ -1659,21 +1659,84 @@ void Child(void)
 	Exit(0);
 }
 
+/*
+int getInput(void)
+{
+	char buf[1];
+	
+	Read(buf, 1, ConsoleInput);
+	if(buf[0] < '0' || buf[0] > '9')	return -1;
+	else buf[0] - '0';
+}
+*/
+
 /* The entrance of the user program. */
 int main(void)
 {
 	int i = 0;
+	/*int mode = 0;*/
 	numberOfDoctors = 3;
 	numberOfNurses = 5;
 	numberOfXrays = 2;
 	numberOfExamRooms = 5;
-	numberOfAdults = 30;
+	numberOfAdults = 10;
 	numberOfWRNs = numberOfCashiers = 1;
 	numberOfChildren = numberOfParents = 30;
 	remainNurseCount = numberOfNurses;
 	remainPatientCount = numberOfPatients = numberOfAdults + numberOfChildren; 
 	indexParent = numberOfAdults;
 	indexChild = numberOfAdults;
+
+	/*
+	print("Please choose the mode of the program.\n");
+	print("0 for hard coding input, 1 for user self-defined input.\n");
+	mode = getInput();
+	if(mode){
+		print("Number of Doctors (2 to 3): = [Count]\n");
+		numberOfDoctors = getInput();
+		print("Number of Nurses (2 - 5) = [Count]\n");
+		numberOfNurses = getInput();
+		print("Number of XRay Technicians/Rooms (1 - 2) = [Count]\n");
+		numberOfXrays = getInput();
+		print("Number of Patients = [Count]\n");
+		numberOfAdults = getInput();
+		print("Number of Parents/Child Patients (30 - 49) = [Count]\n");
+		numberOfChildren = getInput();
+		print("Number of Examination Rooms (2 - 5) = [Count]\n");
+		numberOfExamRooms = getInput();
+		
+		numberOfParents = numberOfChildren;
+		remainNurseCount = numberOfNurses;
+		numberOfPatients = remainPatientCount = numberOfAdults + numberOfChildren; 
+		indexParent = numberOfAdults;
+		indexChild = numberOfAdults;
+		
+		if(numberOfDoctors != 2 && numberOfDoctors != 3){
+			print("The interval of the number of the Doctors is [2, 3].\n");
+			return;
+		}
+		if(numberOfNurses < 2 || numberOfNurses > 5){
+			print("The interval of the number of the Nurses is [2, 5].\n");
+			return;
+		}
+		if(numberOfXrays != 1 && numberOfXrays != 2){
+			print("The interval of the number of the Xray Technicians is [1, 2].\n");
+			return;
+		}
+		if(numberOfAdults < 0 || numberOfAdults > 40){
+			print("The interval of the number of the Patients is [0, 40].\n");
+			return;
+		}
+		if(numberOfChildren < 30 || numberOfChildren > 40){
+			print("The interval of the number of the Parents/Child Patients is [30, 40].\n");
+			return;
+		}
+		if(numberOfExamRooms < 2 || numberOfExamRooms > 5){
+			print("The interval of the number of the Examination Room is [2, 5].\n");
+			return;
+		}
+	}
+	*/
 	
 	/* Initialize the Locks, Condition Variables, Monitor Variables */
 	/* and the initial state of each entity. */
