@@ -2,24 +2,40 @@
 #define PRINT_H
 #include "../userprog/syscall.h"
 
+int length(const char *buf)
+{
+    int i = 0;
+	while (*buf++){i++;}
+    return i;
+}
+
 int print(const char* fmt, ...)  
 {   
+	char buf[256];
 	const char* digit = "0123456789";
 	char c; 
-	int j= 0;
+	int j = 0;
+	int i = 0;
 	char* str;
+	char* s;
 	int d = 0;
 	int len = 0;
 	char digitStr[10];
-	
 	va_list arg_ptr; 
 	va_start(arg_ptr, fmt);
+	for (i = 0; i<256; i++) {
+		buf[i] = '\0';
+	}
+	for (i = 0; i<10; i++) {
+		digitStr[i] = '\0';
+	}
+	s = buf;
 	do 
 	{ 
 		c = *fmt; 
 		if (c != '%') 
 		{ 
-			Write(&c, sizeof(c), ConsoleOutput);  
+			*s++ = c;  
 		} 
 		else 
 		{ 
@@ -36,7 +52,6 @@ int print(const char* fmt, ...)
 							d = d / 10;
 						}
 						d = -j;
-						digitStr[len+1] = '\0';
 						while (len > 0) {
 							digitStr[len] = digit[d % 10];
 							d = d / 10;
@@ -45,7 +60,6 @@ int print(const char* fmt, ...)
 						digitStr[0] = '-';
 					}else if (j == 0) {
 						digitStr[0] = '0';
-						digitStr[1] = '\0';
 					}else {
 						d = j;
 						while (d != 0) {
@@ -53,18 +67,25 @@ int print(const char* fmt, ...)
 							d = d / 10;
 						}
 						d = j;
-						digitStr[len] = '\0';
 						while (len > 0) {
 							digitStr[len-1] = digit[d % 10];
 							d = d / 10;
 							len--;
 						}
 					}
-					Write(digitStr, sizeof(digitStr), ConsoleOutput);
+					i = 0;
+					while (digitStr[i]){
+						*s++ = digitStr[i];
+						i++;
+					}
 					break; 
 				case 's': 
 					str = va_arg(arg_ptr, char*);
-					Write(str, sizeof(str), ConsoleOutput);
+					while(*str){
+						c = *str;
+						*s++ = c;  
+						str++;
+					}
 					break; 
 				default: 
 					break; 
@@ -73,7 +94,11 @@ int print(const char* fmt, ...)
 		} 
 		++fmt; 
 	}while (*fmt != '\0'); 
-	va_end(args);
+	*s = '\0';
+	va_end(arg_ptr);
+	len = length(buf);
+	Write(buf, len, ConsoleOutput);
+
 	return 0;   
 } 
 #endif
