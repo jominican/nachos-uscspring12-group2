@@ -480,9 +480,9 @@ int Acquire_Syscall(int lockId){
 	DEBUG('t', "Acquire Lock %d\n", lockId);
 	
 	//if all the conditions are satisfied, acquire the lock
+	lockForLock->Release();
 	kernelLock[lockId]->lock->Acquire();
 	kernelLock[lockId]->isToBeDeleted = false;	// acquired by a user program, can't be deleted.
-	lockForLock->Release();
 	return 0;
 }
 
@@ -786,7 +786,6 @@ int activeThreadNum()
 	return sum;
 }
 
-
 // The implementation of the Exit() system call.
 void Exit_Syscall(int status)
 {
@@ -813,7 +812,6 @@ void Exit_Syscall(int status)
 		// resources it holds, such as the Locks and CVs.
 		// The Locks and CVs may have been destroyed by the user program,
 		// we just check and make sure the deallocation.
-		
 		// Deallocate the Locks.
 		lockForLock->Acquire();
 		for(int i = 0; i < MAX_LOCK; ++i){
