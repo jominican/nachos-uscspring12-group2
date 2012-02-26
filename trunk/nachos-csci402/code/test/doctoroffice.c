@@ -19,7 +19,7 @@ int main(void)
 	int i = 0;
 	int num = 0;
 	
-	print("Please input the number of the doctor office.\n");
+	print("Please input the number of the doctor office [1, 3].\n");
 	num = getInput();
 	if(num < 0 || num > 3){
 		print("The interval of the doctor office user program should be [1, 3].\n");
@@ -28,7 +28,11 @@ int main(void)
 	
 	for(i = 0; i < num; ++i){ /* we support at most 3 user programs. */
 		Exec("../test/doctorofficefile", sizeof("../test/doctorofficefile"));
+		Yield();
 	}
+	/*
 	Yield();
+	Yield();
+	*/
 	return 0;
 }
