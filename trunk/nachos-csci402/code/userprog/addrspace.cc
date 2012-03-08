@@ -127,7 +127,8 @@ AddrSpace::AddrSpace(OpenFile *executable) : fileTable(MaxOpenFiles) {
     NoffHeader noffH;
     unsigned int i, size;
 	unsigned int stackSize; //the num of pages of a stack for one thread
-
+	acquire_num = 0;
+	lockIdArray = new int[10];
     // Don't allocate the input or output to disk files
     fileTable.Put(0);
     fileTable.Put(0);

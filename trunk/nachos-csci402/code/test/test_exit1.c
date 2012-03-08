@@ -8,7 +8,7 @@ Test system call Exit()
 int lockId;
 int cvId;
 
-int T_1()
+int T1(void)
 {
 	Acquire(lockId);
 	print("T_1 goes to wait.\n");
@@ -18,7 +18,7 @@ int T_1()
 	Exit(0);
 	return 0;
 }
-int T_2()
+int T2(void)
 {
 	Acquire(lockId);
 	print("T_2 goes to wait.\n");
@@ -29,7 +29,7 @@ int T_2()
 	return 0;
 }
 
-int T_3()
+int T3(void)
 {
 	Acquire(lockId);
 	print("T_3 goes to wait.\n");
@@ -40,7 +40,7 @@ int T_3()
 	return 0;
 }
 
-int T_4()
+int T4(void)
 {
 	Acquire(lockId);
 	print("T_4 goes to signal.\n");
@@ -61,10 +61,10 @@ int main()
 	lockId = CreateLock("lock", sizeof("lock")); 
 	cvId = CreateCondition("CV", sizeof("CV")); 
 	
-	Fork(T_1);
-	Fork(T_2);
-	Fork(T_3);
-	Fork(T_4); /*fork 4 threads*/
+	Fork(T1);
+	Fork(T2);
+	Fork(T3);
+	Fork(T4); /*fork 4 threads*/
 	for(; i != 100; ++i)
 		Yield();
 	print("main plans to call Exit.\n");

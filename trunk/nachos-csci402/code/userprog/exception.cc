@@ -326,7 +326,6 @@ int CreateLock_Syscall(unsigned int vaddr, int len)
 	kernelLock[index]->isDeleted = false;
 	kernelLock[index]->isToBeDeleted = true;
 	lockForLock->Release();
-	
 	// Return the position (the index) of the kernel Lock.
 	delete[] buf;
 	return index;
@@ -467,7 +466,7 @@ int Acquire_Syscall(int lockId){
 		return -1;
 	}else if (kernelLock[lockId] == NULL || kernelLock[lockId]->lock == NULL || kernelLock[lockId]->isDeleted) {
 		//check if the lock id is deleted
-		printf("The lock is deleted.\n");
+		printf("The lock %d is deleted.\n", lockId);
 		lockForLock->Release();
 		return -1;
 	}else if (kernelLock[lockId]->addrSpace != currentThread->space) {
@@ -499,12 +498,12 @@ int Release_Syscall(int lockId){
 		printf("The lock is deleted.\n");
 		lockForLock->Release();
 		return -1;
-	}else if (kernelLock[lockId]->addrSpace != currentThread->space) {
+	}/*else if (kernelLock[lockId]->addrSpace != currentThread->space) {
 		//check if the lock id is belonged to this process
 		printf("The lock is not belonged to this process.\n");
 		lockForLock->Release();
 		return -1;
-	}
+	}*/
 	
 	DEBUG('t', "Release Lock %d\n", lockId);
 	
@@ -526,10 +525,10 @@ int detect_Lock(int lockId, int conditionId)
 		fprintf(stdout, "lock %d doesn't belong to the current process.\n", lockId);
 		return -1;
 	}
-	if(!kernelLock[lockId]->lock->isHeldByCurrentThread()){ //the current thread doesn't hold the lock
+	/*if(!kernelLock[lockId]->lock->isHeldByCurrentThread()){ //the current thread doesn't hold the lock
 		fprintf(stdout, "current thread doesn't hold the lock %d.\n", lockId);
 		return -1;
-	}
+	}*/
 	return 0;
 }
 
@@ -549,9 +548,7 @@ int detect_CV(int lockId, int conditionId){
 //The implementation of the Wait() system call.
 int Wait_Syscall(int lockId, int conditionId){
 	lockForLock->Acquire();
-	
 	DEBUG('t', "Check if Lock %d is validated\n", lockId);
-	
 	if(detect_Lock(lockId, conditionId) == -1){ //detect data validation
 		lockForLock->Release();
 		return -1;
@@ -579,8 +576,8 @@ int Wait_Syscall(int lockId, int conditionId){
 
 // The implementation of the Signal() system call.
 int Signal_Syscall(int lockId, int conditionId){
-	lockForLock->Acquire();
 	
+	lockForLock->Acquire();
 	DEBUG('t', "Check if Lock %d is validate\n", lockId);
 	
 	if(detect_Lock(lockId, conditionId) == -1){ //detect data validation
@@ -610,8 +607,8 @@ int Signal_Syscall(int lockId, int conditionId){
 
 // The implementation of the BroadCast() system call.
 int BroadCast_Syscall(int lockId, int conditionId){
-	lockForLock->Acquire();
 	
+	lockForLock->Acquire();
 	DEBUG('t', "Check if Lock %d is validate\n", lockId);
 	
 	if(detect_Lock(lockId, conditionId) == -1){ //detect data validation
@@ -790,6 +787,7 @@ int activeThreadNum()
 void Exit_Syscall(int status)
 {
 	// Exit with signal.
+	currentThread->Finish();
 	if(status){
 		printf("User program exit with signal %d.\n", status);
 		return;
@@ -798,10 +796,9 @@ void Exit_Syscall(int status)
 	lockForProcess->Acquire();
 	//--process[currentThread->processID]->totalThread;
 	--process[currentThread->processID].activeThread;
-	
 	DEBUG('t', "Call Exit().\n");
 	
-	if(process[currentThread->processID].activeThread != 0){		// not the last thread for neither of the situations.
+	if(process[currentThread->processID].activeThread != 0 ){		// not the last thread for neither of the situations.
 		// Need to deallocated the 8 pages stack
     	currentThread->space->deleteStackPages(currentThread->threadID);//delete the memory stackPages of the current thread.	
 		lockForProcess->Release();
@@ -854,6 +851,7 @@ void Exit_Syscall(int status)
 	}
 	
 	lockForProcess->Release();
+	currentThread->Finish();
 	// Exit succeed.
 	return;
 }
@@ -862,6 +860,13 @@ void Exit_Syscall(int status)
 void Yield_Syscall()
 {
 	currentThread->Yield();
+}
+// The implementation of the Scanf() system call.
+int Scanf_Syscall()
+{
+	int rv = -1;
+	scanf("%d", &rv);
+	return rv;
 }
 
 void ExceptionHandler(ExceptionType which) {
@@ -957,6 +962,10 @@ void ExceptionHandler(ExceptionType which) {
 		case SC_Yield:
 			DEBUG('a', "Yield syscall.\n");
 			Yield_Syscall();
+			break;
+		case SC_Scanf:
+			DEBUG('a', "Scanf syscall.\n");
+			rv = Scanf_Syscall();
 			break;
 			
 	}

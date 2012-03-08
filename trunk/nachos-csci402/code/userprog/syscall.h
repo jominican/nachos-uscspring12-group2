@@ -38,6 +38,7 @@
 #define SC_Wait 17
 #define SC_Signal 18
 #define SC_BroadCast 19
+#define SC_Scanf 20
 
 
 #define MAXFILENAME 256
@@ -204,6 +205,8 @@ int Signal(int, int);
  * BroadCast in Condition Variable
  */
 int BroadCast(int, int);
+
+int Scanf();
 
 #endif /* IN_ASM */
 

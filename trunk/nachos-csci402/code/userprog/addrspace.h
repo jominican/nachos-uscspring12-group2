@@ -38,7 +38,8 @@ class AddrSpace {
     void RestoreState();		// info on a context switch
     Table fileTable;			// Table of openfiles
 	void deleteStackPages(int); //delete stacks
-
+	int acquire_num;
+	int* lockIdArray; //the array to store the id for the locks in the user program.
  private:
     TranslationEntry *pageTable;	// Assume linear page table translation
 	int* stackArrays;

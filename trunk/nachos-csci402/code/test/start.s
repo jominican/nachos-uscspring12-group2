@@ -202,6 +202,14 @@ BroadCast:
 	j	$31
 	.end BroadCast
 	
+	.globl Scanf
+	.ent	Scanf
+Scanf:
+	addiu $2,$0,SC_Scanf
+	syscall
+	j	$31
+	.end Scanf
+	
 	
 	
         .globl  __main

@@ -83,6 +83,7 @@ class Thread {
   public:
 	int processID;	// The ID which this thread belongs to. 
 	int threadID;
+	int acquire_num;
     Thread(char* debugName);		// initialize a Thread 
     ~Thread(); 				// deallocate a Thread
 					// NOTE -- thread being deleted

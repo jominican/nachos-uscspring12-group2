@@ -17,6 +17,7 @@
 #define XRAY_IMAGE 3
 #define MAX_MEM 3000
 #define NULL 0
+#define MAX_LOCK_ID 5 /*THE MAX INDEX OF lockId_ array*/
 
 /* 
  *	Global data structures.
@@ -135,6 +136,19 @@ int parentChildLock[MAX_PATIENT];
 int wrnWaitNurseLock;
 int parentWaitChildLock[MAX_PATIENT];
 
+int nurseIndexLock;
+int doctorIndexLock;
+int patientIndexLock;
+int xrayIndexLock;
+int childIndexLock;
+int parentIndexLock; /*the lock when the index of each entity increases*/
+
+char lockId_[MAX_LOCK_ID]; /*to store the lock id of wrnWaitNurseLock*/
+int lockId_index = 0; /*to compute the index of lockId_index*/
+int temp_lock_num = 0;/*to store the wrnWaitNurseLock*/
+unsigned char wrnWaitNurseLock_char;
+
+
 /* Condition Variables for each entity. */
 int WRInteractCV;		/* set the Condition Variable for the Waiting Room Nurse and the Patient to interact. */
 int patientWaitingCV;	/* set the Condition Variable that Patients are waiting for in line. */
@@ -150,6 +164,8 @@ int cashierInteractCV;
 int parentChildCV[MAX_PATIENT];
 int wrnWaitNurseCV;
 int parentWaitChildCV[MAX_PATIENT];
+
+
 
 /* Examination Sheets for each entity. */
 int examSheetIndex = -1; /* for wrnExamSheet. */
@@ -269,6 +285,35 @@ void* memcpy (void* to, const void* from, int len)
 	return to;
 }
 
+int getWrnWaitNurseLock(){
+	int pow = 1;
+	int index_temp;
+	temp_lock_num = 0;
+	for(index_temp = lockId_index - 1; index_temp >= 0; --index_temp)
+	{
+	  temp_lock_num += lockId_[index_temp] *  pow;
+	  pow *= 10;
+	}
+	return temp_lock_num;
+}
+
+void setWrnWaitNurseLock(int lockID){
+	int j = 0;
+	temp_lock_num = lockID;
+	
+	do{
+		temp_lock_num /= 10;
+		lockId_index++;
+		
+	}while(temp_lock_num > 0);
+	temp_lock_num = lockID;
+	for(j = lockId_index - 1; j >= 0; --j){
+		lockId_[j] = temp_lock_num % 10;
+		temp_lock_num /= 10;
+	}
+
+}
+
 /*
  * Init
  *	Initialize all of the global variables.
@@ -280,6 +325,8 @@ void* memcpy (void* to, const void* from, int len)
 void Init(void)
 {
 	int i = 0;
+	int j = 0;
+
 	
 	/* Initialize the Waiting Room Nurse(). */
 	wrnNurseIndex = 0;
@@ -300,6 +347,19 @@ void Init(void)
 	patientWaitingCV = CreateCondition("patientWaitingCV", sizeof("patientWaitingCV"));
 	patientWaitNurseCV = CreateCondition("patientWaitNurseCV", sizeof("patientWaitNurseCV"));
 	wrnWaitNurseLock = CreateLock("wrnWaitNurseLock", sizeof("wrnWaitNurseLock"));
+	setWrnWaitNurseLock(wrnWaitNurseLock);
+	wrnWaitNurseLock_char = wrnWaitNurseLock + '0';
+	
+    /*nurseIndexLock = CreateLock("nurseIndexLock", sizeof("nurseIndexLock"));
+	doctorIndexLock = CreateLock("doctorIndexLock", sizeof("doctorIndexLock"));
+	patientIndexLock = CreateLock("patientIndexLock", sizeof("patientIndexLock"));
+	xrayIndexLock = CreateLock("xrayIndexLock", sizeof("xrayIndexLock"));
+	childIndexLock = CreateLock("childIndexLock", sizeof("childIndexLock"));
+	parentIndexLock = CreateLock("parentIndexLock", sizeof("parentIndexLock")); /*the lock when the index of each entity increases*/
+    
+	
+	
+	/*lockId_ = '0' + wrnWaitNurseLock;*/
 	wrnWaitNurseCV = CreateCondition("wrnWaitNurseCV", sizeof("wrnWaitNurseCV"));
 	
 	/* Initialize the Nurse(). */
@@ -374,6 +434,7 @@ void Init(void)
 	for(i = 0; i < numberOfPatients; ++i){
 		leave[i] = 0;
 	}
+
 	for(i = 0; i < numberOfPatients; ++i){
 		parentChildLock[i] = CreateLock("parentChildLock", sizeof("parentChildLock"));
 	}
@@ -398,8 +459,10 @@ void Init(void)
 void Doctor(void)
 {
 	int i = 0, roomIndex = -1, result = -1, images = -1;
-	int index = indexDoctor;
+	int index;
+	index = indexDoctor;
 	++indexDoctor;
+
 	
 	while(remainPatientCount){
 		/* Check for the state of the Examination Rooms. */
@@ -449,10 +512,11 @@ void Doctor(void)
 		}
 		
 		/* Avoid busy waiting. */
-		for(i = 0; i < 1; ++i)
+		for(i = 0; i < 100; ++i)
 			Yield();
 	}
 	Exit(0);
+	
 }
 
 /* Nurse */
@@ -466,10 +530,11 @@ void Nurse(void)
 	int index_xray = -1;
 	int loopID = 0;
 	int tempXrayID = 0;
-	int index = indexNurse;
-    ExamSheet* patientExamSheet;
-	++indexNurse;
-    
+	int index;
+	ExamSheet* patientExamSheet;
+	index = indexNurse;
+    ++indexNurse;
+
 	while(remainPatientCount)
 	{
 		/*********************************************************/
@@ -482,18 +547,18 @@ void Nurse(void)
 			}
         if(i == numberOfExamRooms)	/* no Examination Room is availble at this time. */
 		{
-		    Release(examRoomLock);
+			Release(examRoomLock);	
 		}
 		else
-		{		    
+		{		
 			examRoomState[i] = E_BUSY; /*set the state of the examRoom to be E_BUSY. */
 			Release(examRoomLock);
 			Acquire(nurseWrnLock);
 			nurseTakeSheetID[tail++] = index;
 			nurseWaitWrnCount++;
 			Wait(nurseWrnLock, nurseWrnCV);
-			
-			Acquire(wrnWaitNurseLock);
+			/*wrnWaitNurseLock = GetLockId(1);*/
+			/*Acquire(getWrnWaitNurseLock());*/
 			nurseWaitWrnCount--;
 			if(nextActionForNurse == 1)    /*when the nurse is informed by the WRN to go to take a patient in the waiting room. */
 			{
@@ -515,12 +580,14 @@ void Nurse(void)
 				Release(patientWaitNurseLock);
 				
 				/*awake the waiting nurse and let she continue her work. */
-				Signal(wrnWaitNurseLock, wrnWaitNurseCV);
-				Release(wrnWaitNurseLock);
+				/*wrnWaitNurseLock = GetLockId(1);*/
+				getWrnWaitNurseLock();
+				Acquire(wrnWaitNurseLock_char - '0');
+				Signal(wrnWaitNurseLock_char - '0', wrnWaitNurseCV);
+				Release(wrnWaitNurseLock_char - '0');
 				
 				Wait(nurseLock[index], nurseCV[index]);
 				print("Nurse [%d] escorts Adult Patient /Parent [%d] to the examination room.\n", index, patientID[index]);
-			
 				patient_ID = patientID[index];				
 				nurseExamSheet[index]->examRoomID = i;	/* assign the Exam Room number. */
 				Signal(nurseLock[index], nurseCV[index]);
@@ -545,14 +612,15 @@ void Nurse(void)
 				examRoomState[i] = E_FREE;
 				Release(examRoomLock);
 				Release(nurseWrnLock);
-				Signal(wrnWaitNurseLock, wrnWaitNurseCV);
-				Release(wrnWaitNurseLock);
+				/*wrnWaitNurseLock = GetLockId(1);*/
+				/*Signal(getWrnWaitNurseLock(), wrnWaitNurseCV);
+				Release(getWrnWaitNurseLock());*/
 			}
 		}
 		/* end of Task 1. */
 
 		/* Avoid busy waiting. */
-		for(loopTime = 0; loopTime != 1; ++loopTime)
+		for(loopTime = 0; loopTime != 100; ++loopTime)
 			Yield();
 			
 		/****************************************************/
@@ -624,7 +692,7 @@ void Nurse(void)
 		else{	/* no Patient is in state of FINISH. */
 		}		
 
-		for(loopTime = 0; loopTime != 1; ++loopTime)
+		for(loopTime = 0; loopTime != 100; ++loopTime)
 			Yield();
 
 		/******************************************/
@@ -677,7 +745,7 @@ void Nurse(void)
 		}
         /* end of Task 3. */		
 		
-		for(loopTime = 0; loopTime != 1; ++loopTime)
+		for(loopTime = 0; loopTime != 100; ++loopTime)
 			Yield();
 		
 		/*************************************************/
@@ -711,11 +779,12 @@ void Nurse(void)
 			Release(examRoomLockArray[loopID]);
 		}
 
-		for(loopTime = 0; loopTime != 1; ++loopTime)
+		for(loopTime = 0; loopTime != 100; ++loopTime)
 			Yield();   		
 	}
 	remainNurseCount--;
 	Exit(0);
+	
 }
 
 /* WaitingRoomNurse */
@@ -737,7 +806,6 @@ void WaitingRoomNurse(void)
 			}else {
 				waitingRoomNurseState = W_FREE;		/* if no one is in line, the Waiting Room Nurse is free. */
 			}
-			
 			Acquire(WRInteractLock);		/* the Waiting Room Nurse gets ready for talking with Patient first. */
 			Release(WRLock);		/* let the Patient have the right to act. */
 			Wait(WRInteractLock, WRInteractCV);		/* wait for the Patient coming to tell the task. */
@@ -777,15 +845,16 @@ void WaitingRoomNurse(void)
 				nurseTakeSheet_ID = nurseTakeSheetID[head++];
 				numOfNursesPassed++;
 				nextActionForNurse = 1; /* tell Nurse to go to pick up a Patient. */
-				
 				print("Nurse [%d] tells Waiting Room Nurse to give a new examination sheet.\n", nurseTakeSheet_ID);
 				print("Waiting Room nurse gives examination sheet of patient [%d] to Nurse [%d].\n", wrnToNurseExamSheet->patientID, nurseTakeSheet_ID);
 				Signal(nurseWrnLock, nurseWrnCV);
+				
 				/* WRN tries to release nurseWrnLock after giving the Exam Sheet to a Nurse. */
-				Acquire(wrnWaitNurseLock);
-				Release(nurseWrnLock);		
-				Wait(wrnWaitNurseLock, wrnWaitNurseCV);
-				Release(wrnWaitNurseLock);
+				/*wrnWaitNurseLock = GetLockId(1);*/
+				Acquire(wrnWaitNurseLock_char - '0');
+				Release(nurseWrnLock);
+				Wait(wrnWaitNurseLock_char - '0', wrnWaitNurseCV);
+				Release(wrnWaitNurseLock_char - '0');
 			}
 			else
 			{
@@ -793,11 +862,8 @@ void WaitingRoomNurse(void)
 				nurseTakeSheet_ID = nurseTakeSheetID[head++];
 				nextActionForNurse = 0; /* not go to pick Patient. */
 				Signal(nurseWrnLock, nurseWrnCV);
-				/* WRN tries to release nurseWrnLock because there is no Patient waiting. */
-				Acquire(wrnWaitNurseLock);
 				Release(nurseWrnLock);
-				Wait(wrnWaitNurseLock, wrnWaitNurseCV);
-				Release(wrnWaitNurseLock);
+
 			}
 		}
 		else
@@ -806,10 +872,11 @@ void WaitingRoomNurse(void)
 			Release(nurseWrnLock);
 		}
 		
-		for(i = 0 ; i < 1; ++i)
+		for(i = 0 ; i < 100; ++i)
 			Yield();
 	}	/*end of while */
 	Exit(0);
+
 }
 
 /* Cashier */
@@ -882,17 +949,19 @@ void Cashier(void)
 		}
 		
 		/* Avoid busy waiting. */
-		for(i = 0; i < 1; ++i)
+		for(i = 0; i < 100; ++i)
 			Yield();
 	}
 	Exit(0);
+
 }
 
 /* XrayTechnician */
 void XrayTechnician(void)
 {
 	int i = 0, result = -1;
-	int index = indexXT; 
+	int index;
+	index = indexXT;
 	++indexXT;
 	
 	while(remainPatientCount){
@@ -966,20 +1035,20 @@ void XrayTechnician(void)
 		}
 		
 		/* Avoid busy waiting. */
-		for(i = 0; i < 1; ++i)
+		for(i = 0; i < 100; ++i)
 			Yield();
 	}
 	Exit(0);
+
 }
 
 /* Patient */
 void Patient(void) 
 {
-	int index = indexPatient;	
 	ExamSheet* myExamSheet;		/* the Patient declares a new Exam Sheet for himself. */
 	char patient_id[10];
 	char patient_name[20];
-	int patient_ID = index;
+	int patient_ID;
 	int patient_age = -1;
 	int i = 0, symptomID = -1;
 	int nurse_id = -1;
@@ -987,8 +1056,12 @@ void Patient(void)
 	int examRoomSecondTime_id = -1;
 	int examRoomNurse_id = -1;
 	int xrayRoom_id = -1;
+	int index;
+	index = indexPatient;
+	patient_ID = index;
 	++indexPatient;
 	patient_age = rand() % 50 + 15;
+
 	
 	print("Adult Patient [%d] has entered the Doctor's Office Waiting Room.\n", patient_ID);
 	/* the Patient gets in the line for the first time to get a form. */
@@ -1248,16 +1321,17 @@ void Patient(void)
 	Release(cashierInteractLock);
 	--remainPatientCount;	/* one Patient leaves the Doctor's office. */
 	Exit(0);
+
 }
 
 /* Parent */
 void Parent(void) 
 {
-	int index = indexParent;
+	int index;
 	ExamSheet* myExamSheet;		/* the Patient declares a new Exam Sheet for himself. */
 	char patient_id[10];
 	char patient_name[20];
-	int patient_ID = index;
+	int patient_ID;
 	int patient_age = -1;
 	int i = 0, symptomID = -1;
 	int nurse_id = -1;
@@ -1266,6 +1340,8 @@ void Parent(void)
 	int examRoomNurse_id = -1;
 	int xrayRoom_id = -1;
 	int tmpExamSheetIndex = -1;
+	index = indexParent;
+	patient_ID = index;
 	++indexParent;
 	patient_age = rand() % 14 + 1;
 	
@@ -1610,14 +1686,17 @@ void Parent(void)
 	/*****************************************/
 	--remainPatientCount;	/* a Patient leaves the Docotr's office. */
 	Exit(0);
+
 }
 
 /* Child Patient */
 void Child(void)
 {
-	int index = indexChild;
+	int index;
 	int doctor_id;
-	int patient_ID = index;
+	int patient_ID;
+	index = indexChild;
+	patient_ID = index;
 	++indexChild;
 	
 	Acquire(parentWaitChildLock[patient_ID]);
@@ -1657,53 +1736,46 @@ void Child(void)
 	}	/*end of while. */
 	Release(parentChildLock[patient_ID]);		/*child leaves with his/her parent. */
 	Exit(0);
-}
 
-/*
-int getInput(void)
-{
-	char buf[1];
-	
-	Read(buf, 1, ConsoleInput);
-	if(buf[0] < '0' || buf[0] > '9')	return -1;
-	else buf[0] - '0';
 }
-*/
 
 /* The entrance of the user program. */
 int main(void)
 {
+
 	int i = 0;
-	/*int mode = 0;*/
-	numberOfDoctors = 3;
+	/*int lock = 0;
+	int mode = 0;*/
+	numberOfDoctors = 5;
 	numberOfNurses = 5;
 	numberOfXrays = 2;
 	numberOfExamRooms = 5;
-	numberOfAdults = 10;
+	numberOfAdults = 15;
 	numberOfWRNs = numberOfCashiers = 1;
-	numberOfChildren = numberOfParents = 30;
+	numberOfChildren = numberOfParents = 15;
 	remainNurseCount = numberOfNurses;
 	remainPatientCount = numberOfPatients = numberOfAdults + numberOfChildren; 
 	indexParent = numberOfAdults;
 	indexChild = numberOfAdults;
-
-	/*
+	
+	/*lock = CreateLock("lock", sizeof("lock"));
+	Acquire(lock);
 	print("Please choose the mode of the program.\n");
 	print("0 for hard coding input, 1 for user self-defined input.\n");
-	mode = getInput();
+	mode = Scanf();
 	if(mode){
-		print("Number of Doctors (2 to 3): = [Count]\n");
-		numberOfDoctors = getInput();
+		print("Number of Doctors (2 to 3) = [Count]\n");
+		numberOfDoctors = Scanf();
 		print("Number of Nurses (2 - 5) = [Count]\n");
-		numberOfNurses = getInput();
+		numberOfNurses = Scanf();
 		print("Number of XRay Technicians/Rooms (1 - 2) = [Count]\n");
-		numberOfXrays = getInput();
-		print("Number of Patients = [Count]\n");
-		numberOfAdults = getInput();
-		print("Number of Parents/Child Patients (30 - 49) = [Count]\n");
-		numberOfChildren = getInput();
+		numberOfXrays = Scanf();
+		print("Number of Patients (0 - 40) = [Count]\n");
+		numberOfAdults = Scanf();
+		print("Number of Parents/Child Patients (30 - 40) = [Count]\n");
+		numberOfChildren = Scanf();
 		print("Number of Examination Rooms (2 - 5) = [Count]\n");
-		numberOfExamRooms = getInput();
+		numberOfExamRooms = Scanf();
 		
 		numberOfParents = numberOfChildren;
 		remainNurseCount = numberOfNurses;
@@ -1713,29 +1785,30 @@ int main(void)
 		
 		if(numberOfDoctors != 2 && numberOfDoctors != 3){
 			print("The interval of the number of the Doctors is [2, 3].\n");
-			return;
+			Exit(0);
 		}
 		if(numberOfNurses < 2 || numberOfNurses > 5){
 			print("The interval of the number of the Nurses is [2, 5].\n");
-			return;
+			Exit(0);
 		}
 		if(numberOfXrays != 1 && numberOfXrays != 2){
 			print("The interval of the number of the Xray Technicians is [1, 2].\n");
-			return;
+			Exit(0);
 		}
 		if(numberOfAdults < 0 || numberOfAdults > 40){
 			print("The interval of the number of the Patients is [0, 40].\n");
-			return;
+			Exit(0);
 		}
 		if(numberOfChildren < 30 || numberOfChildren > 40){
 			print("The interval of the number of the Parents/Child Patients is [30, 40].\n");
-			return;
+			Exit(0);
 		}
 		if(numberOfExamRooms < 2 || numberOfExamRooms > 5){
 			print("The interval of the number of the Examination Room is [2, 5].\n");
-			return;
+			Exit(0);
 		}
 	}
+	Release(lock);
 	*/
 	
 	/* Initialize the Locks, Condition Variables, Monitor Variables */
@@ -1783,4 +1856,5 @@ int main(void)
 	}
 	
 	Exit(0);
+
 }
