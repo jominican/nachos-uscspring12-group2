@@ -31,7 +31,7 @@ CPP = $(GCCDIR)cpp
 INCDIR =-I../userprog -I../threads
 CFLAGS = -G 0 -c $(INCDIR)
 
-all: halt matmult sort testfiles acquirelock releaselock wait wait1 signal signal1 broadcast broadcast1 createlock createcondition destroylock destroycondition exec testcv test_Exec test_ExecFile testcv1 exit test_exit1 
+all: halt matmult sort testfiles acquirelock releaselock wait wait1 signal signal1 broadcast broadcast1 createlock createcondition destroylock destroycondition doctoroffice doctorofficefile exec testcv test_ExecError test_ExecFile testcv1 exit test_exit1 
 
 start.o: start.s ../userprog/syscall.h
 	$(CPP) $(CPPFLAGS) start.s > strt.s
@@ -158,11 +158,6 @@ test_ExecFile: test_ExecFile.o start.o
 	$(LD) $(LDFLAGS) start.o test_ExecFile.o -o test_ExecFile.coff
 	../bin/coff2noff test_ExecFile.coff test_ExecFile
 	
-test_Exec.o: test_Exec.c
-	$(CC) $(CFLAGS) -c test_Exec.c
-test_Exec: test_Exec.o start.o
-	$(LD) $(LDFLAGS) start.o test_Exec.o -o test_Exec.coff
-	../bin/coff2noff test_Exec.coff test_Exec
 	
 exit.o: exit.c
 	$(CC) $(CFLAGS) -c exit.c
@@ -176,6 +171,29 @@ test_exit1: test_exit1.o start.o
 	$(LD) $(LDFLAGS) start.o test_exit1.o -o test_exit1.coff
 	../bin/coff2noff test_exit1.coff test_exit1
 
+test_ExecError.o: test_ExecError.c
+	$(CC) $(CFLAGS) -c test_ExecError.c
+test_ExecError: test_ExecError.o start.o
+	$(LD) $(LDFLAGS) start.o test_ExecError.o -o test_ExecError.coff
+	../bin/coff2noff test_ExecError.coff test_ExecError
+	
+doctoroffice.o: doctoroffice.c
+	$(CC) $(CFLAGS) -c doctoroffice.c
+doctoroffice: doctoroffice.o start.o
+	$(LD) $(LDFLAGS) start.o doctoroffice.o -o doctoroffice.coff
+	../bin/coff2noff doctoroffice.coff doctoroffice
+	
+doctoroffice.o: doctoroffice.c
+	$(CC) $(CFLAGS) -c doctoroffice.c
+doctoroffice: doctoroffice.o start.o
+	$(LD) $(LDFLAGS) start.o doctoroffice.o -o doctoroffice.coff
+	../bin/coff2noff doctoroffice.coff doctoroffice
 
+doctorofficefile.o: doctorofficefile.c
+	$(CC) $(CFLAGS) -c doctorofficefile.c
+doctorofficefile: doctorofficefile.o start.o
+	$(LD) $(LDFLAGS) start.o doctorofficefile.o -o doctorofficefile.coff
+	../bin/coff2noff doctorofficefile.coff doctorofficefile
+	
 clean:
 	rm -f *.o *.coff

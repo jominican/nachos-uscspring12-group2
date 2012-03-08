@@ -32,6 +32,9 @@ int print(const char* fmt, ...)
 	s = buf;
 	do 
 	{ 
+		for (i = 0; i<10; i++) {
+			digitStr[i] = '\0';
+		}
 		c = *fmt; 
 		if (c != '%') 
 		{ 

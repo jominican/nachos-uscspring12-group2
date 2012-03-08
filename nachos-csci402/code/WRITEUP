@@ -1,79 +1,122 @@
-Writeup for Project 1, Spring 2012
+Writeup for Project 2, Spring 2012
 
 Date: 02/04/2012
 
 Group 2:	    Name			Email				StudentID
-		    Litao Deng		litaoden@usc.edu		1862559792		    
+		    Litao Deng			litaoden@usc.edu		1862559792		    
 		    Hao Chen			haoc@usc.edu			4029003250
 		    Anqi Wu			anqiwu@usc.edu			8784768365
 			
 I. Requirements:
 
 	Part 1
-		Implement locks and condition variables. Define our own private variables and implement interfaces.
-		Finally achieve the mutual exclusion and sequential control among threads sharing data and resource in the same critical section.
+		Implement system calls and exception handling.
+		Firstly, support the following system calls already defined in syscall.h: Fork, Exec, Exit, and Yield. Also implement system calls for the Lock class Acquire() and Release() methods and the Condition class Wait(), Signal(), and Broadcast() functions. 
+		Secondly, implement constructor and destructor system calls to create a Lock and a Condition object. These are to be called: CreateLock, DestroyLock, CreateCondition, DestroyCondition.
+		Last, design and demonstrate a test suite for all the system calls.
 
 	Part 2
-		Simulate the operation of a doctor's office by implementing threads, list, and synchronization. 
-		Each role is a thread and they have synchronous and mutual exclusive tasks, such as one doctor can only diagnose one patient at a time, and the other patients can not come in.
-		This is an example for mutual exclusive task. We need to implement the diagnoses for all the patients without leaving any patient stuck in any procedure.
-	
+		Implement multiprogramming. Achieve the way of allocating physical memory frames so that multiple programs can be loaded into memory at once by using BitMap. And also complete the implementation of the Exec and Fork system calls. 
+
+	Part 3
+		Implement part 2 of project 1 as a set of multithreaded Nachos user programs. Use the new Lock and Condition system calls that implemented in part 1 for synchronization. Use the Fork system call to create all the threads. Provide a test suite that proves the implementation is correct.
+
 II. Assumptions: 	
 
-	Part 1
-		A thread can release a lock even though it does not hold.
-		A thread can release a lock even though it does not acquire it.
-		we implement the synchronization using locks.
-		Condition variable is always used with the same lock.
-	
-	Part 2
-		Adult patient is equal to or older than 15, Child patient is younger than 15.
-		Doctor initiatively check the exam room state, but not informed by nurses.
-		Waiting room nurse asks for a nurse to escort a patient every time she finishes the interaction with a patient. 
-		Patient and nurse together wait in an exam room for a doctor to come.
-		Nurse cannot leave the exam room only if a doctor comes.
-		There's no pocket here. Doctor leaves as soon as he finishes diagnosing and patient waits till a nurse initiatively comes to escort him away.
-		Each X-ray room has a waiting queue. Nurse escorts a patient there and puts him in the queue then leaves.
-		X-ray technician can only check for the next patient only if the patient is escorted away.
-		When a doctor finally finishes the diagnose for the patient, we consider it as "the patient has been diagnosed by a doctor".
-		Patient either has to take an X-ray or a shot. They cannot both happen.
-		We verified that Nachos has a memory management problem and we tried to dynamically allocate memories for arrays but the allocated memories are sometimes deleted by Nachos.
-		We have already successfully implemented codes and achieved a synchronized, multi-threaded system by using dynamic allocation, but very occasionally, segmentation fault caused by allocation problem occurs.
-		Therefore, we perform static allocation here in our implementation (in this case, we limit the interval of the Adult Patients and Child Patients to [0, 1000], [30, 1000] respectively).
-	
+	Part 1 & 2
+		Provide a character array parameter to give CreateLock and CreateCondition system calls a name.
+		The maximum process number is 3. If more than 3, print error and return fail. After every process finish, the physical space, locks and cvs it used should be released for executing other new processes.
+		The size of the stack for each thread is 8.
+		The maximum number of threads in each process is 200.
+		The maximum lock number is 5001.
+		The maximum cv number is 5001.
+		The total number of physical pages is 8192.
+
+	Part 3
+		We support hardcoding input and also user program input. However, for the convenience consideration, we comment the user program input code. If you want to enable the self-defined input function, please uncomment from line ???? to line ???? in doctorofficefile.c. 
+		For each user program, we allow to let the user to self input the number of doctor office at the beginning of the program. The number could be 1 or 2.
+		For hardcoding, the number of patients in each doctor office is 30.
+		
 III. Design:
 
 	Part 1
-		1. Lock Acquire
-			disable interrupt
-			if it's the holder then it just quit
-			if the lock is free, the current thread just takes it
-			if the lock is busy, the current thread sleeps and waits for this lock
-			restore interrupt
-		2. Lock Release
-			disable interrupt
-			if it's not the holder then it just quit
-			if no one is waiting for the lock, let the lock be free
-			if some one is waiting for the lock, let the thread be the owner
-			restore interrupt
-		3. Judge whether the current thread is the holder of the lock
-		4. Condition Wait
-			disable interrupt
-			if the lock is null, then there's an error
-			if the condition's waiting lock is null, then let the lock be the waiting lock
-			if the lock is not consistent with the waiting lock in the condition, then there's an error and quit
-			if they are consistent, the current thread release the lock and waits for the condition variable to wake it up and to acquire the lock again
-			restore interrupt
-		5. Condition Signal
-			disable interrupt
-			if no one is waiting for the condition variable, then just quit
-			if the lock is not consistent with the waiting lock in the condition, then there's an error and quit
-			if they are consistent, then wakes up a waiting thread if there's a one and puts it into the ready queue for cpu
-			restore interrupt
-		6. Condition Broadcast
-			Circularly wakes up all the waiting threads
-
+		We design kernel_lock[MAX_KERNEL_LOCK] and kernel_condition[MAX_KERNEL_CONDITION] to store all locks and conditions. Each lock or condition is a struct storing ID, kernel lock or condition, isDeleted indicating whether it's deleted or not, and isToBeDeleted indicating whether it could be deleted. We also set an overall lockForLock and lockForCV to access these two arrays. We also create a process table to maintain the mapping from the SpaceIds that we pass up to the user level, and the actual address space data structures.
+		1. Create Lock System Call
+			Acquire the overall lockForLock for accessing the kernel lock array
+			Find the first vacant kernel lock by using BitMap
+			Create a lock in the indexed position and initialize all the parameters
+			Release the overall lockForLock 
+		2. Destroy Lock System Call
+			Acquire the overall lockForLock for accessing the kernel lock array
+			Check whether the specified lock could be deleted according to its struct parameters
+			if the kernel lock could be deleted, then delete it
+			Release the overall lockForLock 
+		3. Create Condition System Call
+			Acquire the overall lockForCV for accessing the kernel cv array
+			Find the first vacant kernel cv by using BitMap
+			Create a cv in the indexed position and initialize all the parameters
+			Release the overall lockForCV
+		4. Destroy Condition System Call
+			Acquire the overall lockForCV for accessing the kernel cv array
+			Check whether the specified cv could be deleted according to its struct parameters
+			if the kernel cv could be deleted, then delete it
+			Release the overall lockForCV
+		5. Acquire Lock System Call
+			Acquire the overall lockForLock for accessing the kernel lock array
+			Check whether the specified lock is accessible
+			if the kernel lock is accessible, then acquire it and set it to be undeletable
+			Release the overall lockForLock 
+		6. Release Lock System Call
+			Acquire the overall lockForLock for accessing the kernel lock array
+			Check whether the specified lock is accessible
+			if the kernel lock is accessible, then release it and set it to be deletable
+			Release the overall lockForLock 
+		7. Wait System Call
+			Acquire the overall lockForCV for accessing the kernel cv array
+			Validate both lock and cv
+			if validated, then wait the cv with the specified lock
+			Release the overall lockForCV 
+		8. Signal System Call
+			Acquire the overall lockForCV for accessing the kernel cv array
+			Validate both lock and cv
+			if validated, then signal one thread waiting on the cv with the specified lock
+			Release the overall lockForCV 
+		9. Broadcast System Call
+			Acquire the overall lockForCV for accessing the kernel cv array
+			Validate both lock and cv
+			if validated, then broadcast all the threads waiting on the cv with the specified lock
+			Release the overall lockForCV 
+		10. Yield System Call
+			Just call current->Yield()
+		11. Exit System Call
+			Decrease the active thread number
+			if the current thread is not the last thread in its process, then just finish the thread and delete its stack
+			if the current thread is the last thread in its process but not the last thread in all the processes, delete all the kernel locks and kernel cvs possessed by its own process, delete its process' space and finish current thread itself
+			if the current thread is the last thread in its process and is the last thread in all the processes, delete all the kernel locks and kernel cvs possessed by its own process, delete its process' space and finally call interrupt->Halt() to stop the machine
+	
 	Part 2
+		1. Exec System Call
+			Check whether the executable file is available to open
+			Establish a new address space for the process 
+			if process id is smaller than MAX_PROCESS, we initialize and construct the address space
+			else we delete the executable file since it's not allowed to be executed
+			Create a new thread for the current process as the main thread to execute all the codes in executable file, then delete the executable file
+			call fork to schedule the current thread on Ready Queue
+
+		2. Fork System Call
+			Create a new thread for current process, increment the total thread number and also the active thread number
+			Allocate an eight-page size stack for the new thread in physical memory
+			call fork to schedule the current thread on Ready Queue
+		
+		3. Mapping From Visual Address to Physical Address and Allocating Physical Memory Frames
+			Establish a pageTable having numPages+stackSize*MAX_THREADS translation entries, renew the old table by allocating enough memory for newly created threads' stacks
+			Mapping virtual page to physical page by finding vacant physical memory using BitMap
+		
+		4. Allocating Stack Pages
+			Find the virtual address for the eight-page stack and map it to physical address by using BitMap. Allocate the memory right after the previous stack.
+
+	Part 3
+		This part is basically the same with part 2 in project 1. But we change all the kernel function like acquire lock, wait and all the others into user program function by calling system calls, and we add function like create lock, create condition and so forth. Since the user program is more like a subset of C, we need to develop some functions instead of calling library functions like what we use to do.
 		There are 9 entities in this part, and each has its own task. In each one's task, there will be many interactions with others
 		1. Patient:
 			enters the doctor's office and enters the waiting room first
@@ -187,13 +230,33 @@ III. Design:
 				continues to interact with the next patient				
 				
 		5. Cashier:
-			The cashier waits in the cash room if there is no patient comes to check.			if there is one patient comes to check,				the cashier set his state to be BUSY				then the cashier interacts with the patient.				after the patient finishes the task of paying for the bill				the cashier again goes to check if there is patient waiting to interact with him, if there is no patient waiting the cashier, then the				cashier continues to check if there is patient coming to wait.
+			The cashier waits in the cash room if there is no patient comes to check.
+			if there is one patient comes to check,
+				the cashier set his state to be BUSY
+				then the cashier interacts with the patient.
+				after the patient finishes the task of paying for the bill
+				the cashier again goes to check if there is patient waiting to interact with him, if there is no patient waiting the cashier, then the
+				cashier continues to check if there is patient coming to wait.
 		
 		6. Xray Technicians:
-			The technician first check if there is patient waiting to be taken test; 			if there is no patient waiting, then the nurse continues to check.			if there is patient waiting in the waiting queue,				then the technician signal the waiting patient, and, interact with the patient in the x-ray room.				once the x-ray technician finishes his task with the patient, then the technician set the state of the x-ray room to be FINISH				and, waits for a nurse to come to escort the patient to the examination room.			after the patient leaves the x-ray room with a nurse , then the x-ray technician continues to check if there is patient waiting for him/her.
+			The technician first check if there is patient waiting to be taken test; 
+			if there is no patient waiting, then the nurse continues to check.
+			if there is patient waiting in the waiting queue,
+				then the technician signal the waiting patient, and, interact with the patient in the x-ray room.
+				once the x-ray technician finishes his task with the patient, then the technician set the state of the x-ray room to be FINISH
+				and, waits for a nurse to come to escort the patient to the examination room.
+			after the patient leaves the x-ray room with a nurse , then the x-ray technician continues to check if there is patient waiting for him/her.
 		
 		7. Doctors:
-			The doctor first waits in his/her office to be called by the nurse.			after one nurse comes to ask the doctor to go to an examination room to diagnose the patient, 				then the doctor follow the nurse to go to the examination room.				after going into the examination room, the doctor check whether the task for the patient is TASK_ONE or TASK_TWO			if the task is TASK_ONE				the doctor randomly decides whether the patient needs x-ray, shot or the patient is fine.			if the task is TASK_TWO				then the doctor checks the x-ray images of the patient			after the doctor finishes the TASK_ONE or TASK_TWO, then he/she posts the examination sheet to the wall box of the examination room; and the doctor leaves the examination room and goes back to his/her office, and waits to be called by the next nurse. 
+			The doctor first waits in his/her office to be called by the nurse.
+			after one nurse comes to ask the doctor to go to an examination room to diagnose the patient, 
+				then the doctor follow the nurse to go to the examination room.
+				after going into the examination room, the doctor check whether the task for the patient is TASK_ONE or TASK_TWO
+			if the task is TASK_ONE
+				the doctor randomly decides whether the patient needs x-ray, shot or the patient is fine.
+			if the task is TASK_TWO
+				then the doctor checks the x-ray images of the patient
+			after the doctor finishes the TASK_ONE or TASK_TWO, then he/she posts the examination sheet to the wall box of the examination room; and the doctor leaves the examination room and goes back to his/her office, and waits to be called by the next nurse. 
 		
 		8. Nurses:
 			The nurse has four tasks.
@@ -208,7 +271,7 @@ III. Design:
      				if the nurse waits until the state is FREE.
      				else there is no nurse interacting with a patient in the waiting room                             
      				then the nurse goes to take a patient in the waiting room;                                                
-			else if the there are enogh nurses waiting in the waiting room to take a patient.
+			else if the there are enough nurses waiting in the waiting room to take a patient.
 			then the nurse terminates the task 1.
 
 			if the nurse has taken a patient from the waiting room to the examination room.
@@ -258,141 +321,467 @@ III. Design:
 				result: examination result.
 				goToCashier: tell whether patient needs to pay. If diagnosing is over, then patient needs to go to the cashier
 			The Waiting Room Nurse holds onto all examination sheets for Patients in the waiting room. The X-ray technician holds the examination sheet for the Patient that is having xray images taken. Nurses that are escorting Patients, carry their examination sheet with them.
-
+		
 IV. Implementation:
 
 	Part 1
 	
 	+ Files Modified
-		threads/synch.cc
-		threads/synch.h
-		threads/main.cc
+		// connect to interface function
+        	Modify	/code/test/start.s	
+        	// implement syscall
+        	Modify	/code/userprog/exception.cc
+        	// declare interface function
+        	Modify	/code/userprog/syscall.h
+		// makefile in test
+        	Modify	/code/test/Makefile
+		// for the convenience of process table
+        	Modify	/code/threads/thread.h
 
-	+ Data Structures added
-		in synch.h
-			bool    value; 	// lock value, true == FREE, false == BUSY
-			Thread* hostThread; 	// the thread who currently hold the lock
-			List*   queue; 	// threads waiting in Acquire() for the value to be == FREE (true)
-			Lock* waitingLock; 	// 
-			List* queue; 	// threads waiting in Wait() for the signal operation
-			
-	+ Functions addes
-		in synch.cc
-			bool Lock::isHeldByCurrentThread()
+	+ Files added
+		// test for create lock
+        	Add	/code/test/createlock.c
+		// test for create condition
+        	Add	/code/test/createcondition.c
+		// test for destroy lock
+        	Add	/code/test/destroylock.c
+        	// test for destroycondition
+        	Add	/code/test/destroycondition.c
+        	// test for acquire lock
+        	Add	/code/test/acquirelock.c
+		// test for release lock
+        	Add	/code/test/releaselock.c
+        	// test for wait
+        	Add	/code/test/wait.c
+		Add	/code/test/wait1.c
+		// test for signal
+        	Add	/code/test/signal.c
+		Add	/code/test/signal1.c
+		// test for signal and wait interaction
+        	Add	/code/test/testcv.c
+		// test for broadcast
+        	Add	/code/test/broadcast.c
+		Add	/code/test/broadcast1.c
+		// print function for user program
+        	Add	/code/test/print.h
+		// test for exit
+        	Add	/code/test/exit.c
+			/code/test/test_exit1.c
+
+	+ Data Structures added, and the file they were added to.
+		- Add to /code/userprog/exception.cc
+			// System call Lock.
+			struct KernelLock{
+				Lock* lock;
+				AddrSpace* addrSpace;
+				bool isDeleted;	// the current state of the kernel lock.
+				bool isToBeDeleted;	// valid to delete.
+			};
+
+			// System call CV.
+			struct KernelCV{
+				Condition* cv;
+				AddrSpace* addrSpace;
+				bool isDeleted;	// the current state of the kernel cv.
+				bool isToBeDeleted;	// valid to delete.
+			};
+
+			// Address struct to run a thread.
+			struct Addr {
+				AddrSpace* space;
+				int vaddr; 
+				int nvaddr; 	// 8 stack pages address.
+			};
+
+			// User program.
+			struct Process{
+				int processID;
+				int totalThread;	// for thread ID.
+				int activeThread;	// for check the live thread number.
+			};
+			int processID = 0;
+			KernelLock* kernelLock[MAX_LOCK];
+			KernelCV* kernelCV[MAX_CV];
+			Process* process = new Process[MAX_PROCESS];
+			Lock* lockForLock = new Lock("lockForLock");
+			Lock* lockForCV = new Lock("lockForCV");
+			Lock* lockForProcess = new Lock("lockForProcess");	
+			BitMap* lockBM = new BitMap(MAX_LOCK);
+			BitMap* cvBM = new BitMap(MAX_CV);
+
+		- Add to file /code/threads/thread.h
+			int processID;	// The ID which this thread belongs to. 
+			int threadID;
+	
+	+ Functions added and in which file.
+		- Add to /code/userprog/exception.cc
+			// The implementation of the CreateLock() system call.
+			int CreateLock_Syscall(unsigned int vaddr, int len);
+			// The implementation of the DestroyLock() system call.
+			int DeleteLock_Syscall(int lockIndex);
+			// The implementation of the CreateCondition() system call.
+			int CreateCondition_Syscall(unsigned int vaddr, int len);
+			// The implementation of the DestroyCondition() system call.
+			int DeleteCondition_Syscall(int cvIndex);
+			// The implementation of the Acquire() system call.
+			int Acquire_Syscall(int lockId);
+			// The implementation of the Release() system call.
+			int Release_Syscall(int lockId);
+			int detect_Lock(int lockId, int conditionId);
+			int detect_CV(int lockId, int conditionId);
+			//The implementation of the Wait() system call.
+			int Wait_Syscall(int lockId, int conditionId);
+			// The implementation of the Signal() system call.
+			int Signal_Syscall(int lockId, int conditionId);
+			// The implementation of the BroadCast() system call.
+			int BroadCast_Syscall(int lockId, int conditionId);
+			int activeThreadNum();
+			// The implementation of the Exit() system call.
+			void Exit_Syscall(int status);
+			// The implementation of the Yield() system call.
+			void Yield_Syscall();
 		
 	+ Function modified
-		in main.cc
-			#ifdef THREADS
-			extern void Problem2(void), TestSuite(void);
-			#endif
+		- Modify in /code/userprog/exception.cc
+			void ExceptionHandler(ExceptionType which);
 			
-			#ifdef THREADS
-			//ThreadTest();
-			if (!strcmp(*argv, "-T"))               // Test Suite: link for this code is at the bottom of part 1 description
-				TestSuite();
-			if (!strcmp(*argv, "-P2"))               // Problem 2: for part 2
-				Problem2();
-			#endif
-	
 	Part 2
 	
 	+ Files Modified
-		main.cc
+		// implement syscall
+        	Modify	/code/userprog/exception.cc
+        	// mapping virtual addr to physical addr and allocate stack size
+        	Modify	/code/userprog/addrspace.cc	
+		// change physical memory size
+        	Modify	/code/machine/machine.h
+	+ Files Added
+		// test for exec and fork
+        	Add	/code/test/exec.c 
+				/code/test/test_ExecFile.c
+		//test for exec an invalid file
+		Add	/code/test/test_ExecError.c
+
+		
+	+ Data Structures added, and the file they were added to.
+		- Add to /code/userprog/addrspace.cc
+			BitMap* phyMemBM =  new BitMap(NumPhysPages);
+			Lock* phyMemBMLock = new Lock("phyMemBMLock");
+	+ Functions added and in which file.
+		- Add to /code/userprog/exception.cc
+			void Run_KernelProcess(int space);
+			// The implementation of the Exec() system call.
+			void Exec_Syscall(unsigned int vaddr, int len);
+			void Run_KernelThread(int addr);
+			// The implementation of the Fork() system call.
+			void Fork_Syscall(unsigned int vaddr);
+		
+		- Add to /code/userprog/addrspace.cc
+			int AddrSpace::AllocateStackPages(int threadID);
+			int AddrSpace::deleteStackPages(int thread_id);
+
+	+ Function modified
+		- Modify in /code/userprog/addrspace.cc
+			AddrSpace::AddrSpace(OpenFile *executable) : fileTable(MaxOpenFiles);
+
+	Part 3
 	
 	+ Files Added
-		problem2.cc
-		
+		// changing doctor office into multiprogram
+        	Add	/code/test/doctorofficefile.c
+		Add	/code/test/doctoroffice.c   
+
+	+ Functions added and in which file.
+		- Add to /code/test/doctorofficefile.c comparing with /code/threads/problem2.cc			
+			/* Self-defined rand(). */
+			int rand();
+			/* Self-defined strcpy(). */
+			void _strcpy(char* tgt, const char* src);
+			/* Self-defined strcat(). */
+			void _strcat(char* tgt, const char* src);
+			/* Self-defined sprint(). */
+			void _sprint(char* tgt, int src);
+			/* Self-defined newExamSheet(). */
+			void newExamSheet(ExamSheet tgt);
+			/* Self-defined memcpy(). */
+			void* memcpy (void* to, const void* from, int len);
+
+					
 	+ Function modified
-		in main.cc
-			#ifdef THREADS
-			extern void Problem2(void), TestSuite(void);
-			#endif
-			
-			#ifdef THREADS
-			//ThreadTest();
-			if (!strcmp(*argv, "-T"))               // Test Suite: link for this code is at the bottom of part 1 description
-				TestSuite();
-			if (!strcmp(*argv, "-P2"))               // Problem 2: for part 2
-				Problem2();
-			#endif
+		- Modify in /code/test/doctorofficefile.c comparing with /code/threads/problem2.cc
+			modify all the acquire lock, release lock, wait, signal and broadcast into user program function by calling system calls
 
 V. Testing:
 	Part 1
 
 	+ How to test
-
-		cd threads
-		nachos -T 
+		cd code
+		gmake clean
+		gmake
+		cd userprog
+		To test acquire lock system call, nachos -x ../test/acquirelock
+		To test release lock system call, nachos -x ../test/releaselock
+		To test create lock system call, nachos -x ../test/createlock
+		To test destroy lock system call, nachos -x ../test/destroylock
+		To test create condition system call, nachos -x ../test/createcondition
+		To test destroy condition system call, nachos -x ../test/destroycondition
+		To test wait system call, nachos -x ../test/wait
+		To test signal system call, nachos -x ../test/signal
+		To test broadcast system call, nachos -x ../test/broadcast
+		To test that Signal and Wait system call can correctly interact with each other, nachos -x ../test/testcv
 
 	+ Test Output
-
-		test 1 (testing whether only the owner of the lock can release the lock): t1 is the owner of the lock, when other threads try to release the lock, it prompts that "Error: Only the Lock holder can release the Lock!"
-		test 2 (testing the deadlock): t1 acquires the lock l1 then signals c1, but there's no thread waiting on c1. After t1 releases l1, t2 acquires it then waits on c1, which results in a deadlock. test 2 does not completes finally.
-		test 3 (testing that threads will wait on the t3_c1 condition variable. Only one t3_waiter will be released): waiter 0-4 all wait on c1. signaler signals once and only waiter 0 is freed from the condition t3_c1
-		test 4 (testing that these threads will wait on the t4_c1 condition variable. All t4_waiters will be released): waiter 0-4 all wait on c1. signaler broadcasts and all the waiters are freed from the condition t3_c1
-		test 5 (testing whether a condition variable is binder to the same lock): t5_t1 acquires Lock t5_l1, waiting on t5_c1; t5_t2 acquires Lock t5_l2, signaling t5_c1. And then it prompts that "Error: A Condition Variable should be binded to the same Lock object!" 
-
+	
+		1. To test acquire lock system call: After start the program of acquirelock; it creates lock 0, then it successful acquire lock 0. Then it tries to acquire invalid lock index, and it fails to do so and the program continues. 
+			Output: 
+			Test Acquire() system call.
+ 			->Test1: create lock 0.
+ 			->Test1: try to acquire lock 0 that is normally created and succeed.
+			->Test1: release lock 0.
+			Lock index is out of range.
+ 			->Test2: try to acquire lock -1 whose index is out of range and fail.
+			The lock doesn't exist.
+			->Test3: try to acquire lock 100 that is not created yet and fail.
+		2. To test release lock system call: After start the program of releaselock; it creates lock 0, then it successful acquire lock 0 and release lock 0. Then it tries to release invalid lock index, and it fails to do so; and the program continues. 
+			Output: 
+			Test Release() system call.
+ 			->Test1: acquire lock 0.
+ 			->Test1: try to release lock 0 that is normally acquired and succeed.
+			Lock index is out of range.
+ 			->Test2: try to release lock -1 whose index is out of range and fail.
+ 			->Test3: try to release lock 100 that is not acquired yet and fail.
+		3. To test create lock system call: After start the program of createlock, it successfully creates one lock. 
+			Output: 
+			Test CreateLock() system call.
+ 			->Create lock 0.
+ 			->Acquire lock 0.
+ 			->Release lock 0.
+ 			->DestroyLock lock 0.
+		4. To test destroy lock system call: After start the program of destroylock, it successfully creates one lock and destroy it.
+			Output: 
+			Test DestroyLock() system call.
+ 			->Create lock 0.
+ 			->Acquire lock 0.
+ 			->Release lock 0.
+ 			->Test situation destroy an invalid lock id 1.
+			The specified lock has already been deleted.
+ 			->Test situation destroy a valid lock id 48.
+ 			->DestroyLock lock 0.
+		5. To test create condition system call: After start the program of createcondition, it successfully create one condition and destroy it.
+			Output: 
+			Test CreateCondition() system call.
+ 			->Create cv 0.
+ 			->DestroyCondition cv 0.
+		6. To test destroy condition system call: After start the program of destroycondition, it create one condition and successfully destroy it.
+			Output: 
+			Test DestroyCondition() system call.
+ 			->Create cv 0.
+ 			->DestroyCondition cv 0.
+		7. To test wait system call: 
+			Two files are related, wait.c wait1.c. 
+			wait.c: execute a user program which runs. wait1.c
+			wait1.c: create one lock and cv; fork two threads. 
+			Thread 1 first acquires lock 0, then it tries to wait with an invalid CV or lock, it fails to do so; after this, it successfully waits on CV 0 and lock 0; and then thread 2 acquires lock 0 and successfully signal thread 1 on CV0 lock 0.
+			Output: 
+			Test Wait() system call.
+			Test Wait() system call.
+ 			->Thread 1 acquire lock 0.
+ 			->Test situation the thread wait on a invalid lock id 1.
+			The lock 1 doesn't exist or has been deleted.
+ 			->Test situation the thread wait on a invalid CV id 1.
+			Condition 1 doesn't exist or has been deleted.
+ 			->Test situation the thread wait on a valid lock id 0 and CV id 0.
+ 			->Thread 2 acquire lock 0.
+ 			->Thread 2 signal Thread 1 on Condition 0 with Lock 0.
+ 			->Thread 2 release lock 0.
+ 			->Thread 1 was signaled on Condition 0 with Lock 0.
+ 			->Thread 1 release lock 0.
+		8. To test signal system call: 
+			Two files: signal.c signal1.c. 
+			signal.c: execute a user program which runs signal.c. 
+			signal1.c: create one lock and cv; fork two threads. 
+			Thread 1 first acquires lock 0, then it waits on CV 0; thread 2 acquires lock 1, then it tries to signal with an invalid CV or lock, it fails to do so; after this it successfully signal thread 1 on CV 0 and lock 0.
+			Output: 
+			Test Signal() system call.
+			Test Signal() system call.
+ 			->Thread 1 acquire lock 0.
+ 			->Thread 1 wait on Condition 0 with Lock 0.
+ 			->Thread 2 acquire lock 0.
+ 			->Test the situation the thread use a invalid lock id 1.
+			The lock 1 doesn't exist or has been deleted.
+ 			->Test the situation the thread use a invalid CV id 1.
+			Condition 1 doesn't exist or has been deleted.
+ 			->Test the situation the thread use a valid lock id and valid CV id.
+ 			->Thread 2 succeed in signaling Thread 1 on Condition 0 with Lock 0.
+ 			->Thread 2 release lock 0.
+ 			->Thread 1 release lock 0.
+		9. To test broadcast system call: 
+			Two files: broadcast.c; broadcast1.c. 
+			broadcast.c: exec a program which runs broadcast1.c. 
+			broadcast1.c: fork 3 threads and creates one lock and one CV, do the test. 
+			Thread 1 and 2 first acquire lock 0 then both of them wait on CV 0; after this, thread 3 acquire lock 0 and tries to broadcast on an invalid CV or invalid lock, but it fails to do so; then thread 3 tries to broadcast on CV 0 with lock 0; thread 3 releases the lock 0; after this, both thread 1 and tread 2 are waked up.
+			Output: 
+			Test Broadcast() system call.
+ 			->Thread 1 acquire lock 0.
+ 			->Thread 1 wait on Condition 0 with Lock 0.
+ 			->Thread 2 acquire lock 0.
+ 			->Thread 2 wait on Condition 0 with Lock 0.
+ 			->Thread 3 acquire lock 0.
+ 			->Test situation that the thread broadcast an invalid lock id 1.
+			The lock 1 doesn't exist or has been deleted.
+ 			->Test situation that the thread broadcast an invalid CV id 1.
+			->Test situation that that the thread broadcast on a valid cv id 0 and valid lock id 0. 
+ 			->Thread 3 succeed in broadcasting all the threads on Condition 0 with Lock 0.
+ 			->Thread 3 release lock 0.
+ 			->Thread 1 was signaled just now on 0 with Lock 0.
+ 			->Thread 1 release lock 0.
+ 			->Thread 2 was signaled just now on 0 with Lock 0.
+ 			->Thread 2 release lock 0.
+		10. To test the Signal and Wait system call can correctly interact with each other: 
+			Two files: testcv.c testcv1.c
+			testcv.c: exec a program which runs testcv1.c
+			testcv1.c: fork 2 threads and creates two lock CVs, do the test.
+			Two Threads: T_1; T_2.
+			Two Locks: 0; 1.
+			Two CV: 0; 1.
+			T_1 first acquires lock 0, then it tries to wait on CV 0 with lock 1; this is invalid, so it fails to wait on CV 0 with lock 1. Then it successfully wait on CV 0 with lock 0.
+			T_2 acquires lock 0 after T_1 wait on CV 0; then it tries to signal on CV 0, with lock 1, this is invalid, so it fails to signal on CV 0 with lock 1. Then it successfully signal T_1 on CV 0 with lock 0. Then it waits on CV 1 with lock 1.
+			T_1 is waked up by T_2, then it signals on CV 1 with lock 0, then releases the lock 0.
+			T_2 is waked up by T_1, then it releases the lock.
+			Output: 
+			Successfully created one lock and two condition variables.
+			Fork T_1.
+			Fork T_2.
+			T_1 tries to acquire lock 0.
+			T_1 owns lock 0.
+			Test situation the thread wait on CV id 0 with a lock id 1 which it doesn't own.
+			current thread doesn't hold the lock 1.
+			T_1 plans to wait on CV 0.
+			T_2 tries to acquire lock 0.
+			T_2 owns lock 0.
+			Test situation the thread signal on a cv id 0 with a lock id 1 which it doesn't own.
+			current thread doesn't hold the lock 1.
+			T_2 tries to signal T_1 on CV 0.
+			T_2 tries to wait on CV 1.
+			T_1 was signaled on CV 0 just now.
+			T_1 tries to signal T_2 on CV 1.
+			T_1 tries to release lock 0.
+			T_2 was signaled on CV 1 just now.
+			T_2 tries to release lock 0.
+		
 	Part 2
 
 	+ How to test
-
-		cd threads
-		nachos -P2
-		when prompts "For the System Test, press 0. For the Simple Test for the requirement 1-6, press the corresponding number from 1-6."
-			to system test: just input the number of each entity interactively, press 0
-			to test 1 "Child Patients are never abandoned by their Parent, nor go anywhere without their Parent.", press 1
-			to test 2 "Waiting Room Nurses only talk to one Patient/Parent at a time.", press 2
-			to test 3 "Cashiers only talk to one Patient/Parent at a time.", press 3
-			to test 4 "Patients/Parents never go anywhere without being escorted by a Nurse.", press 4
-			to test 5 "All Patients leave the Doctor's Office. No one stays in the Waiting Room, Examination Room, or Xray Room, forever.", press 5
-			to test 6 "Two Doctors never examine the same Patient at the same time.", press 6
+		cd code
+		gmake clean
+		gmake
+		cd userprog
+		To test system call Exec and Fork, nachos -x ../test/exec
+		To test Exec when, the file is invalid, nachos -x ../test/test_ExecError
+		To test Exit syscall, nachos -x ../test/exit
 
 	+ Test Output
+		
+		1.  Test system cal Exec and Fork.
+			Two files: exec.c and test_ExecFile.c
+			exec.c: start 3 user programs which run test_ExecFile.c
+			test_ExecFile.c: Fork two threads and let them run.
+			We can find that, the 3 user programs runs synchronically, this means we successfully implement multi-programming; 
+			at the same time all the threads exit normally at last.
+			output:
+			Test Exec(), Fork(), Exit(), Yield() system calls
+			 ->Try to invoke Exec().
+			 ->Try to invoke Exec().
+			 ->Try to invoke Exec().
+			Successfully Created user program.
+			Try to invoke Fork().
+			Try to invoke Fork().
+			Try to invoke Fork().
+			Successfully Created user program.
+			Try to invoke Fork().
+			Try to invoke Fork().
+			Try to invoke Fork().
+			Successfully Created user program.
+			Try to invoke Fork().
+			Try to invoke Fork().
+			Successfully Created Thread.
+			Successfully Created Thread.
+			Successfully Created Thread.
+			Successfully Created Thread.
+			Successfully Created Thread.
+			Successfully Created Thread.
+			Successfully Created Thread.
+			Successfully Created Thread.
+			Successfully Created Thread.
+			Machine halting!
 
-		system test: the outputs vary among different kinds of inputs.
-		test 1: parent always appears binded with the same index of child, and they usually show up in pair
-			for example:  when nurse gives child a shot, parent also shows up there
-					Nurse [1] asks Adult Patient/Parent [0] "Are you ready for the shot?"
-					Parent [0] says, "He is ready for the shot".
-					Child patient [0] has been given a shot.
-					Nurse [1] tells Adult Patient/Parent [0] "Your shot is over".
-		test 2:	waiting room nurse always interacts with one patient at a time, and there's no other act intervening, no matter in GETFORM process or in GIVEFORM process.
-			for example: 	when patient comes to hand over the form
-					[Adult patient] submits the filled form to the Waiting Room Nurse.
-					Waiting Room nurse accepts the form from Adult Patient/Parent with name [Patient_1 ] and age [56].
-					Waiting Room nurse creates an examination sheet for [Adult/Child] patient with name [Patient_1 ] and age [56].
-					Waiting Room nurse tells the Adult Patient/Parent [1] to wait in the waiting room for a nurse.
-		test 3: cashier always interacts with one patient at a time, and there's no other act intervening in.
-			for example: 	Parent [2] enters the queue for Cashier.
-					Parent [2] reaches the Cashier.
-					Parent [2] hands over Child Patient [2]'s examination sheet to the Cashier.
-					Cashier receives the examination sheet for Child Patient [2] from Parent [2].
-					Cashier reads the examination sheet of Child Patient [2] and asks Parent [2] to pay $168.
-					Parent [2] pays the Cashier $168.
-					Cashier accepts $168 from Parent [2].
-					Cashier gives a receipt of $168 to Parent [2].
-					Parent [2] receives a receipt for Child Patient [2] from the Cashier.
-					Cashier waits for the Patient to leave.
-					Parent [2] leaves the doctor's office with Child Patient [2].
-		test 4:	every time patient goes to anywhere, there's an output before telling that "Nurse escorts Adult Patient /Parent to XXX."
-			for example:    Nurse [0] escorts Adult Patient /Parent [0] to the examination room.
-					[Adult Patient] [0] is following Nurse [0] to Examination Room [0].
-					[Adult Patient] [0] has arrived at Examination Room [0].
-		test 5: there are outputs "Parent [identifier] leaves the doctor's office with Child Patient [identifier]." and "Adult Patient [identifier] leaves the doctor's office." for every patient. And no one gets stuck in anywhere.
-			for example: 	when we have 2 Adult Patients and 2 Parent/Child Patients
-					Adult Patient [0] leaves the doctor's office.
-					Parent [2] leaves the doctor's office with Child Patient [2].
-					Parent [3] leaves the doctor's office with Child Patient [3].
-					Adult Patient [1] leaves the doctor's office.
-		test 6: one doctor only diagnoses one patient at a time. Also one patient is examined by one doctor at a time.
-			for example:	Doctor [0] is leaving their office.
-					Nurse [0] hands over to the Doctor [0] the examination sheet of Adult/Child Patient [0].
-					Doctor [0] is reading the examination sheet of [Adult/Child] Patient [0] in Examination room [0].
-					Doctor [0] diagnoses [Adult/Child] Patient [0] to be fine and is leaving Examination Room [0].
-					Adult Patient [0] has been diagnosed by Doctor [0].
+		2.  Test Exec when, the file is invalid,
+			One file test_ExecError.c, it tries to execute a program that doesn't exist, in this case, it will output that the user program is unable to open.
+			output:
+			Test Exec()system calls
+			 ->Try to invoke Exec().
+			Unable to open file ../test/test_ExecFile121.
+			 ->Try to invoke Exec().
+			Unable to open file ../test/test_ExecFile121.
+			 ->Try to invoke Exec().
+			Unable to open file ../test/test_ExecFile121.
+			No threads ready or runnable, and no pending interrupts.
+			Assuming the program completed.
+			Machine halting!
+		
+		3.  Test system call Exit
+            Two files 
+		    exit.c: it runs exec two user programs called test_exit1.c
+			test_exit1.c: fork 4 threads, create one lock one CV, all the four threads first acquire the lock, then three of the threads go to wait on the CV, and the last threads call Signal to prepare to wake up one waiting thread. 
+			Finally we can find that in each of the program two threads will wait forever. In this case the system has no need to wait for the two threads; when the last active threads of the two programs call exit, it can call interrupt->Halt() directly. 
+			In the test we can find that totally there 10 threads(including two main threads) in the two user programs. And 4 threads will wait forever, so totally 6 threads call exit function.
+			Output:
+			Test Exit system call.
+			T_1 goes to wait.
+			T_2 goes to wait.
+			T_3 goes to wait.
+			T_4 goes to signal.
+			Plan to Release lock id: 0.
+			After Release lock id: 0.
+			T_4 plans to call Exit.
+			T_1 goes to wait.
+			T_2 goes to wait.
+			T_3 goes to wait.
+			T_4 goes to signal.
+			Plan to Release lock id: 1.
+			After Release lock id: 1.
+			T_4 plans to call Exit.
+			Plan to Release lock id: 0.
+			After Release lock id: 0.
+			T_1 plans to call Exit.
+			Plan to Release lock id: 1.
+			After Release lock id: 1.
+			T_1 plans to call Exit.
+			main plans to call Exit.
+			main plans to call Exit.
+			No threads ready or runnable, and no pending interrupts.
+			Assuming the program completed.
+			Machine halting!
+
+	Part 3
+
+	+ How to test
+		cd code
+		gmake clean
+		gmake
+		cd userprog
+		To test system call, nachos -x ../test/doctoroffice
+	+ Test Output
+		The output shows that all the patients regularly leave the doctor's offices, and no one gets stuck. The program normally exits with only "machine halting" and no other prompts. 
 		
 VI. Discussion:
 
-	Many of the errors in our program turned out to be Nachos issues rather than the operation of doctor's office simulation.
-	Most other issues in the doctor's office arose from typos and misuses of certain locks and conditions, which we corrected them finally.
-	We try to improve and embellish our codes and use dynamic allocation to make it more perfect.
+	+ Experiment expectation.
+    	+ Experiment result.
+    	+ Explanation
+        	1. We use Exec() to create a new process and Fork() to create a new Thread.
+		2. Forked threads have the same Addrspace class with its process. Every process has its own virtual address space. In one virtual address space, we have a fixed size of pages to store code, data and for heap and stack. We consider the main process to be also a main thread in Nachos. Therefore, we allocate a stack for main thread as soon as the virtual page table is established. And whenever fork a new thread, allocate a stack for the thread right after the previous stack. When a thread is deleted, we delete its stack.
+		3. When create a lock or cv, we set it to be deletable. Only the one who's in use is not deletable.
+		4. bzero should be commented. Or else the main memory will be set to 0 when executing a new process.
+		5. We use bitmap for mapping virtual address to physical address and also for finding a vacant kernel lock or cv.
+		6. When the Last thread of all the processes exits, must call interrupt->Halt() to actually stop Nachos.
+		7. We test a lot of "-rs" cases, and there's no error there. If you find any problems, please contact us!!!
